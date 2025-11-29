@@ -3,7 +3,7 @@
 import requests
 import argparse
 import time
-from SETUP import ROUNDS, DEBUG
+from config import ROUNDS, DEBUG
 
 # Advertise keys imports
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey

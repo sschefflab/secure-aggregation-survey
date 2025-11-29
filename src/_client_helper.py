@@ -1,7 +1,7 @@
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 import base64
-from SETUP import DEBUG
+from config import DEBUG
 
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
     pubkey_raw = pubkey.public_bytes(

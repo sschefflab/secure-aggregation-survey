@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Flask web server for 3 clients, 4 rounds, POST JSON."""
 from flask import Flask, request, jsonify
 import threading
-from SETUP import ROUNDS, DEBUG, MAX_CLIENTS
+from config import ROUNDS, DEBUG, MAX_CLIENTS, THRESHOLD_CLIENTS, ROUND1_EXTRA_WAIT, THRESHOLD_WAIT
+from _server_helper import extract_round_client_id_payload
 
 app = Flask(__name__)
 
@@ -15,25 +15,7 @@ def handle_round():
 	# Get data from the request
 	data = request.get_json(force=True)
 
-	# Extract round number from JSON body
-	round = data.get('round')
-	# Handle errors
-	if round is None: return jsonify({'error': 'missing "round" field in JSON body'}), 400
-	try: round = int(round)
-	except Exception: return jsonify({'error': 'invalid "round" value; must be an integer'}), 400
-	if not (1 <= round <= ROUNDS): return jsonify({'error': f'invalid round {round}; must be 1..{ROUNDS}'}), 400
-
-	# Extract client_id from JSON body
-	client_id = data.get('client_id')
-	# TODO V2: HANDLE AUTHENTICATION! CURRENTLY WE DO NOT CHECK TO ENSURE CLIENT NOT LYING ABOUT ID.
-	# Handle errors
-	if client_id is None: return jsonify({'error': 'missing "client_id" field in JSON body'}), 400
-	try: client_id = int(client_id)
-	except Exception: return jsonify({'error': 'invalid "client_id" value; must be an integer'}), 400
-	if not (1 <= client_id <= MAX_CLIENTS): return jsonify({'error': f'invalid client_id {client_id}; must be 1..{MAX_CLIENTS}'}), 400
-
-	# Extract payload from JSON body
-	payload = data.get('payload')
+	(round, client_id, payload) = extract_round_client_id_payload(data)
 
 	with lock:
 		received_data[round][client_id] = payload
