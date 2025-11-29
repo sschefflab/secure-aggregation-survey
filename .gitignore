@@ -1,0 +1,5 @@
+log/*
+!log/
+.venv/
+.vscode/
+!.vscode/settings.json
