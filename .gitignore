@@ -1,5 +1,15 @@
+# logfiles but keep the log folder
 log/*
 !log/
+
+# virtual enironment info
 .venv/
+
+# VSCode settings but keep specific settinsg
 .vscode/
 !.vscode/settings.json
+
+# python cache files, pyc files, etc
+__pycache__/
+*.py[cod]
+*$py.class
