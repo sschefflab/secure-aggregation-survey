@@ -3,11 +3,11 @@
 import requests
 import argparse
 import time
-from config import ROUNDS, DEBUG
+from config import ROUNDS, DEBUG 
 
 # Advertise keys imports
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
-from _client_helper import pubkey_to_b64, privkey_to_b64
+from _client_helper import pubkey_to_b64, privkey_to_b64, poll_for_round1_result
 
 SERVER_URL = 'http://127.0.0.1:5000'
 
@@ -37,13 +37,6 @@ class SecureAggregationClient:
 				'key_s_pub': pubkey_to_b64(self.key_s_pub)
 			}
 		}
-#		return {
-#			'client_id': self.client_id,
-#			'payload': {
-#				'key_c_pub': "asdf",
-#				'key_s_pub': "jkl;"
-#			}
-#		}
 
 	def share_keys(self, keys_from_server):
 		pass
@@ -69,18 +62,32 @@ def main():
 
 	# Round 1: Advertise Keys
 	r1_payload = client.advertise_keys()
-	# include round number in the JSON body
-	r1_payload['round'] = 1
+	r1_payload['round'] = 1 # include round number in the JSON body
+	
+	# DEBUG TEST ONLY -- If we are testing delayed responses, sleep here
+	if DEBUG and (client_id == 3):
+		print("DEBUG: Delaying client 3 round 1 key advertisement by 3 seconds")
+		time.sleep(3)
+
+	# Send round 1 key advertisement
+	print(f"Client {client_id}: Posting round 1 keys...", flush=True)
 	r1_resp = requests.post(f"{SERVER_URL}/round/1", json=r1_payload)
+	print(f"Client {client_id}: Round 1 POST response: {r1_resp.json()}", flush=True)
 
-	if DEBUG:
-		print(f"Client keys after round 1:\nkey_c_sec:{privkey_to_b64(client.key_c_sec)}\nkey_c_pub:{pubkey_to_b64(client.key_c_pub)}\nkey_s_sec:{privkey_to_b64(client.key_s_sec)}\nkey_s_pub:{pubkey_to_b64(client.key_s_pub)}")
+	# Poll for round 1 result
+	result = poll_for_round1_result(client_id, SERVER_URL)
+	if result:
+		print(f"Client {client_id}: Round 1 result: {result}", flush=True)
 
+#	if DEBUG:
+#		print(f"Client keys after round 1:\nkey_c_sec:{privkey_to_b64(client.key_c_sec)}\nkey_c_pub:{pubkey_to_b64(client.key_c_pub)}\nkey_s_sec:{privkey_to_b64(client.key_s_sec)}\nkey_s_pub:{pubkey_to_b64(client.key_s_pub)}", flush=True)
+
+	# Remaining rounds
 	for round in range(2, ROUNDS+1):
 		payload = {'client_id': client_id, 'round': round, 'payload': f'Hello from client {client_id} round {round}'}
+		print(f"Client {client_id}: Sending round {round}...", flush=True)
 		resp = requests.post(f"{SERVER_URL}/round/{round}", json=payload)
-		print(f"Client {client_id} round {round} sent: {payload}")
-		print(f"Client {client_id} round {round} got: {resp.json()}")
+		print(f"Client {client_id} round {round} response: {resp.json()}", flush=True)
 		time.sleep(0.2)
 
 if __name__ == '__main__':

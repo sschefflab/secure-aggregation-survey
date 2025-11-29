@@ -1,7 +1,7 @@
 from flask import jsonify
 from config import ROUNDS, DEBUG, MAX_CLIENTS
 
-def extract_round_client_id_payload(data):
+def extract_round_client_id_payload(data, expected_round):
 	# Extract round number from JSON body
 	round = data.get('round')
 	# Handle errors
@@ -11,6 +11,7 @@ def extract_round_client_id_payload(data):
 		round = int(round)
 	except Exception: 
 		return jsonify({'error': 'invalid "round" value; must be an integer'}), 400
+	assert(round == expected_round, f"Round number {expected_round} from POST does not match JSON body round number {round}")
 	if not (1 <= round <= ROUNDS): 
 		return jsonify({'error': f'invalid round {round}; must be 1..{ROUNDS}'}), 400
 
@@ -31,3 +32,12 @@ def extract_round_client_id_payload(data):
 	payload = data.get('payload')
 	
 	return (round, client_id, payload)
+
+
+def build_keyset_response(received_data, round1_responders):
+	# received_data format: {round: {client_id: {payload}}}
+	round1_data = received_data[1]
+	return {client_id: round1_data[client_id] for client_id in round1_responders}
+
+def response_if_not_r1_responder(client_id):
+	return {'status': 'nonparticipant', 'message': f'Client {client_id} responded too late to participate in Round 1.'}

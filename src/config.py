@@ -10,7 +10,7 @@ THRESHOLD_CLIENTS = 2
 # for demo only! Should really be more like 100
 # t in Bonawitz et al. 2017
 
-# How long to wait in round 1 for enough clients to join
-THRESHOLD_WAIT = 1
-ROUND1_EXTRA_WAIT = 1
-
+# Round 1 timing parameters
+THRESHOLD_WAIT = 1 # Once threshold met, wait this many seconds before finalizing round 1
+R1_POLL_INTERVAL = 0.5  # Once a client joins, poll every this many seconds to wait for round 1 result
+R1_MAX_POLLS = 10  #How many polls to wait maximum before giving up? TODO: For real world, should be MUCH higher, like 100+.
