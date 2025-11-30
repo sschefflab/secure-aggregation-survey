@@ -47,8 +47,8 @@ class SecureAggregationClient:
 	def share_keys(self, r1_response: dict) -> dict:
 
 		# Set clients that responded in r1 and their keys
-		self.round1_responders = list(r1_response.keys())
-		self.pubkeys_for_r1r = r1_response # dict
+		self.round1_responders = [int(r1r_str) for r1r_str in r1_response.keys()]
+		self.pubkeys_for_r1r = {int(r1r_str): r1_response[r1r_str] for r1r_str in r1_response.keys()} # dict with int keys instead of str
 
 		# Verify uniqueness of keys
 		all_c_pub = {self.pubkeys_for_r1r[r1r]["key_c_pub"] for r1r in self.round1_responders}
