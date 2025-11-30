@@ -7,7 +7,7 @@ from config import ROUNDS, DEBUG
 
 # Advertise keys imports
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
-from _client_helper import pubkey_to_b64, privkey_to_b64, poll_for_round1_result
+from _client_helper import pubkey_to_b64, privkey_to_b64, poll_for_round1_result, round1
 
 SERVER_URL = 'http://127.0.0.1:5000'
 
@@ -39,6 +39,7 @@ class SecureAggregationClient:
 		}
 
 	def share_keys(self, keys_from_server):
+
 		pass
 
 	def masked_input_collection(self, ciphertexts_from_server):
@@ -62,25 +63,13 @@ def main():
 
 	# Round 1: Advertise Keys
 	r1_payload = client.advertise_keys()
+	# if DEBUG: print(f"Client keys after round 1:\nkey_c_sec:{privkey_to_b64(client.key_c_sec)}\nkey_c_pub:{pubkey_to_b64(client.key_c_pub)}\nkey_s_sec:{privkey_to_b64(client.key_s_sec)}\nkey_s_pub:{pubkey_to_b64(client.key_s_pub)}", flush=True)
 	r1_payload['round'] = 1 # include round number in the JSON body
+	round1(client_id, r1_payload, SERVER_URL, testing_delay=False)
 	
-	# DEBUG TEST ONLY -- If we are testing delayed responses, sleep here
-	if DEBUG and (client_id == 3):
-		print("DEBUG: Delaying client 3 round 1 key advertisement by 3 seconds")
-		time.sleep(3)
+	# Round 2: Share Keys
 
-	# Send round 1 key advertisement
-	print(f"Client {client_id}: Posting round 1 keys...", flush=True)
-	r1_resp = requests.post(f"{SERVER_URL}/round/1", json=r1_payload)
-	print(f"Client {client_id}: Round 1 POST response: {r1_resp.json()}", flush=True)
-
-	# Poll for round 1 result
-	result = poll_for_round1_result(client_id, SERVER_URL)
-	if result:
-		print(f"Client {client_id}: Round 1 result: {result}", flush=True)
-
-#	if DEBUG:
-#		print(f"Client keys after round 1:\nkey_c_sec:{privkey_to_b64(client.key_c_sec)}\nkey_c_pub:{pubkey_to_b64(client.key_c_pub)}\nkey_s_sec:{privkey_to_b64(client.key_s_sec)}\nkey_s_pub:{pubkey_to_b64(client.key_s_pub)}", flush=True)
+	
 
 	# Remaining rounds
 	for round in range(2, ROUNDS+1):
