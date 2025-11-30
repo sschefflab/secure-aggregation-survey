@@ -59,7 +59,7 @@ def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 	print(f"Client {client_id}: Timeout waiting for round 1 result", flush=True)
 	return None
 
-def round1(client_id, r1_payload, server_url, testing_delay=False):
+def round1(client_id: int, r1_payload: dict, server_url: str, testing_delay=False):
 	# DEBUG TEST ONLY -- If we are testing delayed responses, sleep here
 	if testing_delay:
 		print(f"DEBUG: Delaying client {client_id} round 1 key advertisement by 3 seconds")
@@ -73,7 +73,7 @@ def round1(client_id, r1_payload, server_url, testing_delay=False):
 	result = poll_for_round1_result(client_id, server_url)
 	return result
 
-def derive_shared_key(client_id, other_id, self_c_sec, other_c_pub):
+def derive_shared_key(client_id: int, other_id: int, self_c_sec: X25519PrivateKey, other_c_pub: X25519PublicKey) -> bytes:
     shared_key = self_c_sec.exchange(other_c_pub)
     derived_key = HKDF(
         algorithm=hashes.SHA256(),

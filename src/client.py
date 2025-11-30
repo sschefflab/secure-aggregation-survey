@@ -28,7 +28,7 @@ class SecureAggregationClient:
 		#self.server_url = server_url
 		#self.session = requests.Session()
 
-	def advertise_keys(self):
+	def advertise_keys(self) -> dict:
 		self.key_c_sec = X25519PrivateKey.generate()
 		self.key_c_pub = self.key_c_sec.public_key()
 
@@ -44,7 +44,7 @@ class SecureAggregationClient:
 			}
 		}
 
-	def share_keys(self, r1_response):
+	def share_keys(self, r1_response: dict) -> dict:
 
 		# Set clients that responded in r1 and their keys
 		self.round1_responders = list(r1_response.keys())
@@ -105,7 +105,7 @@ class SecureAggregationClient:
 				)
 				print(f"ct from {self.client_id} to {r1r}: {ciphertexts_for_other_r1r_r2[r1r]}", flush=True)
 
-				print("jencoding: ", jencode_ciphertexts_for_other_r1r_r2(ciphertexts_for_other_r1r_r2), flush=True)
+		print("jencoding: ", jencode_ciphertexts_for_other_r1r_r2(ciphertexts_for_other_r1r_r2), flush=True)
 		
 		r2_payload = {
 			'client_id': self.client_id,
@@ -114,10 +114,10 @@ class SecureAggregationClient:
 		}
 		return r2_payload
 
-	def masked_input_collection(self, ciphertexts_from_server):
+	def masked_input_collection(self, ciphertexts_from_server: dict) -> dict:
 		pass
 
-	def unmasking(self, users_from_server):
+	def unmasking(self, users_from_server: dict) -> dict:
 		pass
 
 
@@ -135,11 +135,14 @@ def main():
 
 	# Round 1: Advertise Keys
 	r1_payload = client.advertise_keys()
-	# if DEBUG: print(f"Client keys after round 1:\nkey_c_sec:{privkey_to_b64(client.key_c_sec)}\nkey_c_pub:{pubkey_to_b64(client.key_c_pub)}\nkey_s_sec:{privkey_to_b64(client.key_s_sec)}\nkey_s_pub:{pubkey_to_b64(client.key_s_pub)}", flush=True)
 	r1_payload['round'] = 1 # include round number in the JSON body # TODO Maybe can remove this?
-	r1_response = round1(client_id, r1_payload, SERVER_URL, testing_delay=False)
+	if DEBUG: testing_delay = (client_id == 3)
+	r1_response = round1(client_id, r1_payload, SERVER_URL, testing_delay=testing_delay)
 	
-	#TODO: Add logic for aborting if not a responder
+	# Abort if nonparticipant in Round 1
+	if 'status' in r1_response and r1_response['status'] == 'nonparticipant':
+		print(f"Client {client_id} is a nonparticipant, aborting.", flush=True)
+		return
 
 	# Round 2: Share Keys
 	r2_payload = client.share_keys(r1_response)

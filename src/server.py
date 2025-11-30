@@ -27,7 +27,7 @@ class SecureAggregationServer:
 		self.app.route('/round1/result', methods=['GET'])(self.get_round1_result)
 
 	
-	def handle_round(self, round_num):
+	def handle_round(self, round_num: int):
 		"""Handle incoming round data from clients"""
 		# Get data from the request
 		data = request.get_json(force=True)
@@ -64,6 +64,15 @@ class SecureAggregationServer:
 
 				else: # Responders locked, client is late
 					response = response_if_not_r1_responder(client_id)
+			elif round == 2:
+				# Round 2 logic can go here
+				if not self.round1_responders_locked.is_set():
+					response = {'status': 'error', 'message': 'Round 2 received before round 1 threshold wait completed.'}
+				elif client_id not in self.round1_responders:
+					response = response_if_not_r1_responder(client_id)
+				else:
+					response = {'status': 'ok', 'received': self.received_data[round]}
+
 			else:
 				# Other rounds
 				response = {'status': 'ok', 'received': self.received_data[round]}
