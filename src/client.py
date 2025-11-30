@@ -136,7 +136,7 @@ def main():
 	# Round 1: Advertise Keys
 	r1_payload = client.advertise_keys()
 	r1_payload['round'] = 1 # include round number in the JSON body # TODO Maybe can remove this?
-	if DEBUG: testing_delay = (client_id == 3)
+	if DEBUG: testing_delay = (client_id == 1)
 	r1_response = round1(client_id, r1_payload, SERVER_URL, testing_delay=testing_delay)
 	
 	# Abort if nonparticipant in Round 1
