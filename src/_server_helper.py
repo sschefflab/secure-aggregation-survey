@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from flask import jsonify
 from config import ROUNDS, DEBUG, MAX_CLIENTS
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 DEBUG = True
 
 ROUNDS = 4
@@ -14,3 +16,9 @@ THRESHOLD_CLIENTS = 2
 THRESHOLD_WAIT = 1 # Once threshold met, wait this many seconds before finalizing round 1
 R1_POLL_INTERVAL = 0.5  # Once a client joins, poll every this many seconds to wait for round 1 result
 R1_MAX_POLLS = 10  #How many polls to wait maximum before giving up? TODO: For real world, should be MUCH higher, like 100+.
+
+PRG_SEED_SIZE = 16 
+# 128 bits
+# size of b_u in Bhowmick et al. 2017
+
+DERIVED_KEY_LENGTH = 32

@@ -1,9 +1,13 @@
-from cryptography.hazmat.primitives import serialization
+#!/usr/bin/env python3
+from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from Crypto.Random import get_random_bytes
 import base64
 import requests
 import time
-from config import DEBUG, R1_POLL_INTERVAL, R1_MAX_POLLS
+from config import DEBUG, R1_POLL_INTERVAL, R1_MAX_POLLS, DERIVED_KEY_LENGTH
 
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
     pubkey_raw = pubkey.public_bytes(
@@ -16,13 +20,16 @@ def b64_to_pubkey(b64_str: str) -> X25519PublicKey:
     pubkey_decoded = base64.b64decode(b64_str.encode('ascii'))
     return X25519PublicKey.from_public_bytes(pubkey_decoded)
 
-def privkey_to_b64(privkey: X25519PrivateKey) -> str:
-    assert(DEBUG) # don't ever want to print priv key if not debugging
+def privkey_to_raw_bytes(privkey: X25519PrivateKey) -> bytes:
     privkey_raw = privkey.private_bytes(
         encoding=serialization.Encoding.Raw,
         format=serialization.PrivateFormat.Raw,
         encryption_algorithm=serialization.NoEncryption() # do not encrypt the key for debugging
     )
+    return privkey_raw
+
+def privkey_to_b64(privkey: X25519PrivateKey) -> str:
+    privkey_raw = privkey_to_raw_bytes(privkey)
     return base64.b64encode(privkey_raw).decode('ascii')
 
 def b64_to_privkey(b64_str: str) -> X25519PrivateKey:
@@ -48,3 +55,45 @@ def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 	
 	print(f"Client {client_id}: Timeout waiting for round 1 result", flush=True)
 	return None
+
+def round1(client_id, r1_payload, server_url, testing_delay=False):
+	# DEBUG TEST ONLY -- If we are testing delayed responses, sleep here
+	if testing_delay:
+		print(f"DEBUG: Delaying client {client_id} round 1 key advertisement by 3 seconds")
+		time.sleep(3)
+
+	print(f"Client {client_id}: Round 1 POST payload: {r1_payload}", flush=True)
+	r1_resp = requests.post(f"{server_url}/round/1", json=r1_payload)
+	print(f"Client {client_id}: Round 1 immediate response: {r1_resp.json()}", flush=True)
+
+    # Poll for round 1 result
+	result = poll_for_round1_result(client_id, server_url)
+	return result
+
+def derive_shared_key(client_id, other_id, self_c_sec, other_c_pub):
+    shared_key = self_c_sec.exchange(other_c_pub)
+    derived_key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=DERIVED_KEY_LENGTH,
+        salt=None,
+        info=b'key-agreement-self'+str(client_id).encode('ascii')+b'-other'+str(other_id).encode('ascii'),
+    ).derive(shared_key)
+    return derived_key
+
+def encrypt_with_derived_key(derived_key: bytes, plaintext: bytes,
+                             associated_data: bytes) -> tuple[bytes, bytes]:
+    aesgcm = AESGCM(derived_key)
+    nonce = get_random_bytes(12) # 96-bit nonce for AES-GCM
+    ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data)
+    return nonce, ciphertext
+
+
+def decrypt_with_derived_key(derived_key: bytes, nonce: bytes, ciphertext: bytes,
+                             associated_data) -> bytes:
+    """
+    Decrypt ciphertext with the same AES-GCM key and nonce.
+    Raises InvalidTag if authentication fails.
+    """
+    aesgcm = AESGCM(derived_key)
+    plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
+    return plaintext
