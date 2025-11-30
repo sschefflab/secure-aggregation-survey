@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -7,7 +8,9 @@ from Crypto.Random import get_random_bytes
 import base64
 import requests
 import time
+import re
 from config import DEBUG, R1_POLL_INTERVAL, R1_MAX_POLLS, DERIVED_KEY_LENGTH
+
 
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
     pubkey_raw = pubkey.public_bytes(
@@ -97,3 +100,42 @@ def decrypt_with_derived_key(derived_key: bytes, nonce: bytes, ciphertext: bytes
     aesgcm = AESGCM(derived_key)
     plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
     return plaintext
+
+def ids_to_associated_data(from_id: int, to_id: int) -> bytes:
+    return f"from:{from_id},to:{to_id}".encode('ascii')
+
+def associated_data_to_ids(associated_data: bytes) -> tuple[int, int]:
+    match = re.search(r"from:([0-9]+),to:([0-9]+)", associated_data.decode('ascii'))
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    raise ValueError(f"Invalid associated_data format, unable to extract from and to from {associated_data.decode('ascii')}")
+
+def bencode(data: bytes) -> str:
+    return base64.b64encode(data).decode('ascii')
+
+def bdecode_to_bytes(data_b64: str) -> bytes:
+    return base64.b64decode(data_b64.encode('ascii'))
+
+def bdecode(data_b64: str) -> bytes:
+    return bdecode_to_bytes(data_b64)
+
+def bdecode_to_str(data_b64: str) -> str:
+    return base64.b64decode(data_b64.encode('ascii')).decode('utf-8')
+
+def jencode_to_bytes(json_data: dict) -> bytes:
+    return json.dumps(json_data).encode('utf-8')
+
+def bytes_to_json(data_bytes: bytes) -> dict:  
+    return json.loads(data_bytes.decode('utf-8'))
+
+def jencode_to_b64str(json_data: dict) -> str:
+    return bencode(json.dumps(json_data).encode('utf-8'))
+
+def b64str_to_json(data_b64_str: str) -> dict:  
+    return bytes_to_json(bdecode_to_bytes(data_b64_str))
+
+def jencode_ciphertexts_for_other_r1r_r2(ciphertexts_for_other_r1r_r2: dict) -> dict:
+    return {r1r: (bencode(nonce), bencode(ciphertext)) for (r1r, (nonce, ciphertext)) in ciphertexts_for_other_r1r_r2.items()}  # Placeholder
+
+def jdecode_ciphertexts(nonce_b64, ciphertext_b64) -> tuple[bytes,bytes]:
+    return (bdecode(nonce_b64), bdecode(ciphertext_b64))

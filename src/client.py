@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import requests
 import argparse
 import time
@@ -7,7 +8,7 @@ from Crypto.Random import get_random_bytes
 from Crypto.Protocol.SecretSharing import Shamir
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from config import ROUNDS, THRESHOLD_CLIENTS, PRG_SEED_SIZE, DEBUG
-from _client_helper import pubkey_to_b64, b64_to_pubkey, privkey_to_raw_bytes, round1, derive_shared_key, encrypt_with_derived_key, decrypt_with_derived_key
+from _client_helper import bencode, jencode_to_bytes, jencode_ciphertexts_for_other_r1r_r2, pubkey_to_b64, b64_to_pubkey, privkey_to_raw_bytes, round1, derive_shared_key, encrypt_with_derived_key, ids_to_associated_data
 
 SERVER_URL = 'http://127.0.0.1:5000'
 
@@ -63,14 +64,15 @@ class SecureAggregationClient:
 								 n=len(self.round1_responders), 
 								 secret=prg_seed)
 		
-		print("Len of privkey_to_raw_bytes(self.key_s_sec):", len(privkey_to_raw_bytes(self.key_s_sec)), flush=True)
-
-		# TODO: YOU ARE HERE. This is where you are. Since these are 32b and need to be 16b, split over two versions.
-		s_sec_shares = Shamir.split(k=THRESHOLD_CLIENTS, 
+		# Shamir shares formatted as ((1, 0xdeadbeef), (2, 0xdeadbeef), ...)
+		s_sec_shares_1 = Shamir.split(k=THRESHOLD_CLIENTS, 
 							  n=len(self.round1_responders), 
-							  secret=privkey_to_raw_bytes(self.key_s_sec))
+							  secret=privkey_to_raw_bytes(self.key_s_sec)[:16])
+		s_sec_shares_2 = Shamir.split(k=THRESHOLD_CLIENTS, 
+							  n=len(self.round1_responders), 
+							  secret=privkey_to_raw_bytes(self.key_s_sec)[16:])
 		self.prg_seed_shares = prg_seed_shares
-		self.s_sec_shares = s_sec_shares
+		self.s_sec_shares = (s_sec_shares_1, s_sec_shares_2)
 
 		# Key agreement and build message to other users 
 		ciphertexts_for_other_r1r_r2 = {}
@@ -86,25 +88,29 @@ class SecureAggregationClient:
 				# Build messages for other users
 				
 				message_for_other_r1r_r2 = {
-					"s_sec_share": s_sec_shares[i],
-					"prg_seed_share": prg_seed_shares[i]
+					"s_sec_share_xs": (s_sec_shares_1[i][0], s_sec_shares_2[i][0]),
+					"s_sec_share_ys": (bencode(s_sec_shares_1[i][1]),
+						bencode(s_sec_shares_2[i][1])),
+					"prg_seed_share_x": prg_seed_shares[i][0],
+					"prg_seed_share_y": bencode(prg_seed_shares[i][1])
 				}
 				print(f"message from {self.client_id} to {r1r}: {message_for_other_r1r_r2}", flush=True)
-
 				
-				associated_data = f"from:{self.client_id},to:{r1r}".encode('ascii')
+				associated_data = ids_to_associated_data(self.client_id, r1r)
 
 				ciphertexts_for_other_r1r_r2[r1r] = encrypt_with_derived_key(
 					derived_key,
-					json.dumps(message_for_other_r1r_r2).encode('utf-8'),
+					jencode_to_bytes(message_for_other_r1r_r2),
 					associated_data
 				)
 				print(f"ct from {self.client_id} to {r1r}: {ciphertexts_for_other_r1r_r2[r1r]}", flush=True)
+
+				print("jencoding: ", jencode_ciphertexts_for_other_r1r_r2(ciphertexts_for_other_r1r_r2), flush=True)
 		
 		r2_payload = {
 			'client_id': self.client_id,
 			'round': 2,
-			'payload': ciphertexts_for_other_r1r_r2
+			'payload': jencode_ciphertexts_for_other_r1r_r2(ciphertexts_for_other_r1r_r2)
 		}
 		return r2_payload
 
@@ -139,7 +145,7 @@ def main():
 	r2_payload = client.share_keys(r1_response)
 	if DEBUG: print(f"Client {client_id} round 2 payload: {r2_payload}", flush=True)
 	r2_response = requests.post(f"{SERVER_URL}/round/2", json=r2_payload)
-	print(f"Client {client_id} round {round} response: {resp.json()}", flush=True)
+	print(f"Client {client_id} round 2 response: {r2_response.json()}", flush=True)
 
 	
 	# Remaining rounds
