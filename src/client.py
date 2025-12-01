@@ -7,7 +7,7 @@ import json
 from Crypto.Random import get_random_bytes
 from Crypto.Protocol.SecretSharing import Shamir
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-from config import ROUNDS, THRESHOLD_CLIENTS, PRG_SEED_SIZE, DEBUG
+from config import ROUNDS, THRESHOLD_CLIENTS, PRG_SEED_SIZE, DEBUG, DEBUG_TESTING_DELAY
 from _client_helper import bencode, jencode_to_bytes, jencode_ciphertexts_for_other_r1r_r2, pubkey_to_b64, b64_to_pubkey, privkey_to_raw_bytes, round1, derive_shared_key, encrypt_with_derived_key, ids_to_associated_data
 
 SERVER_URL = 'http://127.0.0.1:5000'
@@ -135,8 +135,9 @@ def main():
 
 	# Round 1: Advertise Keys
 	r1_payload = client.advertise_keys()
-	#if DEBUG: testing_delay = (client_id == 1)
-	r1_response = round1(client_id, r1_payload, SERVER_URL)
+	testing_delay = (client_id == 1) if DEBUG_TESTING_DELAY else False # if we are delaying a client for testing, which one?
+	round_delay = 1 # if we are delaying a client for testing, which round to delay
+	r1_response = round1(client_id, r1_payload, SERVER_URL, testing_delay if round_delay==1 else False)
 	
 	# Abort if nonparticipant in Round 1
 	if 'status' in r1_response and r1_response['status'] == 'nonparticipant':
@@ -144,6 +145,8 @@ def main():
 		return
 
 	# Round 2: Share Keys
+	if testing_delay and round_delay==2:
+		time.sleep(6)
 	r2_payload = client.share_keys(r1_response)
 	if DEBUG: print(f"Client {client_id} round 2 payload: {r2_payload}", flush=True)
 	r2_response = requests.post(f"{SERVER_URL}/round/2", json=r2_payload)

@@ -41,16 +41,66 @@ class SecureAggregationServer:
 			# Log received data from client
 			print(f"Received from client {client_id} in round {round}: {payload}", flush=True)
 
-			# Route to round-specific handler
+			# Run round-specific pre-checks
+			pre_check_response = None
 			if round == 1:
-				response = self._handle_round1(client_id, payload)
+				pre_check_response = self._check_round1(client_id)
 			elif round == 2:
-				response = self._handle_round2(client_id)
-			else:
-				response = {'status': 'ok', 'received': self.received_data[round]}
+				pre_check_response = self._check_round2(client_id)
+			
+			# If pre-check failed, return the error response
+			if pre_check_response is not None:
+				return jsonify(pre_check_response)
+			
+			# Common threshold-based collection logic
+			response = self._collect_round_response(round, client_id, payload)
 
 		# Send response
 		return jsonify(response)
+	
+	def _check_round1(self, client_id: int) -> dict:
+		"""Pre-check for round 1. Returns None if checks pass, or error response if they fail."""
+		return None  # Round 1 has no special pre-checks
+	
+	def _check_round2(self, client_id: int) -> dict:
+		"""Pre-check for round 2. Returns None if checks pass, or error response if they fail."""
+		# Check if client participated in round 1
+		if not self.roundi_responders_locked[1].is_set():
+			return {'status': 'error', 'message': 'Round 2 received before round 1 threshold wait completed.'}
+		elif client_id not in self.roundi_responders[1]:
+			return response_if_not_responder(client_id, 1)
+		return None
+	
+	def _collect_round_response(self, round: int, client_id: int, payload) -> dict:
+		"""Common logic for collecting clients in a round with threshold-based waiting."""
+		max_responders = MAX_CLIENTS if round == 1 else len(self.roundi_responders[1])
+		
+		# If we haven't hit the threshold yet, add this client to responders
+		if not self.roundi_responders_locked[round].is_set() and len(self.roundi_responders[round]) < max_responders:
+			self.roundi_responders[round].add(client_id)
+			print(f"Round {round}: Client {client_id} added. Responders so far: {len(self.roundi_responders[round])} / Threshold: {THRESHOLD_CLIENTS}", flush=True)
+		
+			# When we first hit the threshold, mark the event and start the wait period
+			if len(self.roundi_responders[round]) >= THRESHOLD_CLIENTS:
+				print(f"Round {round}: Threshold reached ({THRESHOLD_CLIENTS} clients). Starting wait period of {THRESHOLD_WAITS[round]} seconds.", flush=True)
+				if not self.roundi_threshold_met[round].is_set():
+					self.roundi_threshold_met[round].set()
+
+				# Start thread that will wait and lock responders
+				if not self.roundi_responders_locked[round].is_set():
+					threshold_wait_thread = threading.Thread(target=self._threshold_wait, args=(round,))
+					threshold_wait_thread.daemon = True
+					threshold_wait_thread.start()
+		
+			# Respond immediately; actual result happens in get_roundN_result
+			return {'status': 'ok', 'message': f'Client {client_id} registered. Waiting for at least {THRESHOLD_CLIENTS-len(self.roundi_responders[round])} more clients.'}
+
+		elif self.roundi_responders_locked[round].is_set():
+			# Responders locked, client is late
+			return {'status': 'ok', 'message': f'Round {round} complete. Client {client_id} arrived too late.'}
+		else:
+			# Still collecting responses
+			return {'status': 'ok', 'message': f'Client {client_id} registered for round {round}.'}
 	
 	def _handle_round1(self, client_id: int, payload) -> dict:
 		"""Handle round 1 key advertisement logic."""

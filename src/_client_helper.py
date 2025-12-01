@@ -39,7 +39,6 @@ def b64_to_privkey(b64_str: str) -> X25519PrivateKey:
     privkey_decoded = base64.b64decode(b64_str.encode('ascii'))
     return X25519PrivateKey.from_private_bytes(privkey_decoded)
 
-
 def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 	"""Poll server for round 1 result.  Result response from server, or None if timeout"""
 	print(f"Client {client_id}: Polling for round 1 result...", flush=True)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 DEBUG = True
+DEBUG_TESTING_DELAY = False
 
 ROUNDS = 4
 
