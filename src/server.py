@@ -73,7 +73,7 @@ class SecureAggregationServer:
 	
 	def _collect_round_response(self, round: int, client_id: int, payload) -> dict:
 		"""Common logic for collecting clients in a round with threshold-based waiting."""
-		max_responders = MAX_CLIENTS if round == 1 else len(self.roundi_responders[1])
+		max_responders = MAX_CLIENTS if round == 1 else len(self.roundi_responders[round-1])
 		
 		# If we haven't hit the threshold yet, add this client to responders
 		if not self.roundi_responders_locked[round].is_set() and len(self.roundi_responders[round]) < max_responders:
@@ -102,65 +102,6 @@ class SecureAggregationServer:
 			# Still collecting responses
 			return {'status': 'ok', 'message': f'Client {client_id} registered for round {round}.'}
 	
-	def _handle_round1(self, client_id: int, payload) -> dict:
-		"""Handle round 1 key advertisement logic."""
-		# If we haven't hit the threshold yet, add this client to responders
-		if not self.roundi_responders_locked[1].is_set() and len(self.roundi_responders[1]) < MAX_CLIENTS:
-			self.roundi_responders[1].add(client_id)
-			print(f"Round 1: Client {client_id} added. Responders so far: {len(self.roundi_responders[1])} / Threshold: {THRESHOLD_CLIENTS}", flush=True)
-		
-			# When we first hit the threshold, mark the event as done and start the wait period.
-			if len(self.roundi_responders[1]) >= THRESHOLD_CLIENTS:
-				print(f"Round 1: Threshold reached ({THRESHOLD_CLIENTS} clients). Starting wait period of {THRESHOLD_WAITS[1]} seconds.", flush=True)
-				if not self.roundi_threshold_met[1].is_set():
-					self.roundi_threshold_met[1].set()
-
-				# Start thread that will wait and lock responders
-				if not self.roundi_responders_locked[1].is_set():
-					threshold_wait_thread = threading.Thread(target=self._threshold_wait, args=(1,))
-					threshold_wait_thread.daemon = True
-					threshold_wait_thread.start()
-		
-			# Respond immediately; actual result happens in get_round1_result at round1/result
-			return {'status': 'ok', 'message': f'Client {client_id} registered. Waiting for at least {THRESHOLD_CLIENTS-len(self.roundi_responders[1])} more clients.'}
-
-		else: # Responders locked, client is late
-			return response_if_not_responder(client_id, 1)
-	
-	def _handle_round2(self, client_id: int) -> dict:
-		"""Handle round 2 masked input collection logic."""
-		# Check if client participated in round 1
-		if not self.roundi_responders_locked[1].is_set():
-			return {'status': 'error', 'message': 'Round 2 received before round 1 threshold wait completed.'}
-		elif client_id not in self.roundi_responders[1]:
-			return response_if_not_responder(client_id, 1)
-		
-		# If we haven't hit the threshold yet, add this client to responders
-		if not self.roundi_responders_locked[2].is_set() and len(self.roundi_responders[2]) < len(self.roundi_responders[1]):
-			self.roundi_responders[2].add(client_id)
-			print(f"Round 2: Client {client_id} added. Responders so far: {len(self.roundi_responders[2])} / Threshold: {THRESHOLD_CLIENTS}", flush=True)
-		
-			# When we first hit the threshold, mark the event and start the wait period
-			if len(self.roundi_responders[2]) >= THRESHOLD_CLIENTS:
-				print(f"Round 2: Threshold reached ({THRESHOLD_CLIENTS} clients). Starting wait period of {THRESHOLD_WAITS[2]} seconds.", flush=True)
-				if not self.roundi_threshold_met[2].is_set():
-					self.roundi_threshold_met[2].set()
-
-				# Start thread that will wait and lock responders
-				if not self.roundi_responders_locked[2].is_set():
-					threshold_wait_thread = threading.Thread(target=self._threshold_wait, args=(2,))
-					threshold_wait_thread.daemon = True
-					threshold_wait_thread.start()
-		
-			# Respond immediately; actual result happens in get_round2_result
-			return {'status': 'ok', 'message': f'Client {client_id} registered for round 2. Waiting for round 2 result.'}
-
-		elif self.roundi_responders_locked[2].is_set():
-			# Round 2 responders locked, client is late
-			return {'status': 'ok', 'message': f'Round 2 complete. Client {client_id} arrived too late.'}
-		else:
-			# Still collecting responses
-			return {'status': 'ok', 'message': f'Client {client_id} registered for round 2.'}
 	
 	def _threshold_wait(self, round: int):
 		"""Wait for threshold wait period after threshold is reached, collecting any additional clients."""
