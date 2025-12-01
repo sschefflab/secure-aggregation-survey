@@ -9,7 +9,7 @@ import base64
 import requests
 import time
 import re
-from config import DEBUG, R1_POLL_INTERVAL, R1_MAX_POLLS, DERIVED_KEY_LENGTH, R1_MAX_POLLS, R1_THRESHOLD_WAIT, R2_MAX_POLLS, R2_SERVER_WAIT, R2_POLL_INTERVAL
+from config import DEBUG, DERIVED_KEY_LENGTH, MAX_POLLS, POLL_INTERVALS
 
 
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
@@ -43,7 +43,7 @@ def b64_to_privkey(b64_str: str) -> X25519PrivateKey:
 def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 	"""Poll server for round 1 result.  Result response from server, or None if timeout"""
 	print(f"Client {client_id}: Polling for round 1 result...", flush=True)
-	for poll_count in range(R1_MAX_POLLS):
+	for poll_count in range(MAX_POLLS[1]):
 		try:
 			result_resp = requests.get(f"{server_url}/round1/result?client_id={client_id}", timeout=5)
 			if result_resp.status_code == 200:
@@ -54,7 +54,7 @@ def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 		except requests.exceptions.RequestException as e:
 			print(f"Client {client_id}: Error polling: {e}", flush=True)
 		
-		time.sleep(R1_POLL_INTERVAL)
+		time.sleep(POLL_INTERVALS[1])
 	
 	print(f"Client {client_id}: Timeout waiting for round 1 result", flush=True)
 	return None
@@ -62,7 +62,7 @@ def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 def poll_for_round2_result(client_id: int, server_url: str) -> dict:
 	"""Poll server for round 2 result"""
 	print(f"Client {client_id}: Polling for round 2 result...", flush=True)
-	for poll_count in range(R2_MAX_POLLS):
+	for poll_count in range(MAX_POLLS[2]):
 		try:
 			result_resp = requests.get(f"{server_url}/round2/result?client_id={client_id}", timeout=5)
 			if result_resp.status_code == 200:
@@ -73,7 +73,7 @@ def poll_for_round2_result(client_id: int, server_url: str) -> dict:
 		except requests.exceptions.RequestException as e:
 			print(f"Client {client_id}: Error polling: {e}", flush=True)
 		
-		time.sleep(R2_POLL_INTERVAL)
+		time.sleep(POLL_INTERVALS[2])
 	
 	print(f"Client {client_id}: Timeout waiting for round 2 result", flush=True)
 	return None

@@ -34,5 +34,5 @@ def build_keyset_response(received_data: dict[int, dict[int, dict]], round1_resp
 	round1_data = received_data[1]
 	return {client_id: round1_data[client_id] for client_id in round1_responders}
 
-def response_if_not_r1_responder(client_id: int) -> dict:
-	return {'status': 'nonparticipant', 'message': f'Client {client_id} responded too late to participate in Round 1.'}
+def response_if_not_responder(client_id: int, round_failed_to_respond: int) -> dict:
+	return {'status': 'nonparticipant', 'message': f'Client {client_id} responded too late to participate in Round {round_failed_to_respond}.'}
