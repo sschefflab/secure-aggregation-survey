@@ -34,5 +34,19 @@ def build_keyset_response(received_data: dict[int, dict[int, dict]], round1_resp
 	round1_data = received_data[1]
 	return {client_id: round1_data[client_id] for client_id in round1_responders}
 
+def build_sharekeys_response(client_id: int, received_data: dict[int, dict[int, dict]], round2_responders: set[int]) -> dict[int, dict]:
+	# received_data format: {round: {client_id: {payload}}}
+	# Received from client 3 in round 2: {'1': ['jNrWa3PZPHDvX391', 'xxx'], '2': ['kDUON98rzqdA98+n', 'xxx']}
+	# TODO: CHANGE RECEIVED DATA TO ONLY INPUTTING THIS ROUND'S DATA
+	round2_data = received_data[2]
+	to_ret = {}
+	for other_id in round2_responders:
+		if other_id == client_id:
+			continue
+		if other_id not in round2_data or str(client_id) not in round2_data[other_id]:
+			raise ValueError(f"Error: build_sharekeys_response called for client {client_id}, but no round 2 data from other client {other_id} for this client")
+		to_ret[other_id] = round2_data[other_id][str(client_id)] # add received nonce and ciphertext from other_id for client_id to client_id's dictionary
+	return to_ret
+
 def response_if_not_responder(client_id: int, round_failed_to_respond: int) -> dict:
 	return {'status': 'nonparticipant', 'message': f'Client {client_id} responded too late to participate in Round {round_failed_to_respond}.'}

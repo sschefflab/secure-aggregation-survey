@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 import threading
 import time
 from config import ROUNDS, DEBUG, MAX_CLIENTS, THRESHOLD_CLIENTS, THRESHOLD_WAITS
-from _server_helper import extract_round_client_id_payload, build_keyset_response, response_if_not_responder
+from _server_helper import extract_round_client_id_payload, response_if_not_responder, build_keyset_response, build_sharekeys_response
 
 
 class SecureAggregationServer:
@@ -93,11 +93,11 @@ class SecureAggregationServer:
 					threshold_wait_thread.start()
 		
 			# Respond immediately; actual result happens in get_roundN_result
-			return {'status': 'ok', 'message': f'Client {client_id} registered. Waiting for at least {THRESHOLD_CLIENTS-len(self.roundi_responders[round])} more clients.'}
+			return {'status': 'ok', 'message': f'Client {client_id} registered. Waiting for at least {max(THRESHOLD_CLIENTS-len(self.roundi_responders[round]), 0)} more clients.'}
 
 		elif self.roundi_responders_locked[round].is_set():
 			# Responders locked, client is late
-			return {'status': 'ok', 'message': f'Round {round} complete. Client {client_id} arrived too late.'}
+			return response_if_not_responder(client_id, round)
 		else:
 			# Still collecting responses
 			return {'status': 'ok', 'message': f'Client {client_id} registered for round {round}.'}
@@ -134,6 +134,7 @@ class SecureAggregationServer:
 
 	def get_round2_result(self):
 		"""Clients poll this endpoint to get the round 2 result once threshold wait completes."""
+		print("Get round 2 result called", flush=True)
 		# Extract client_id from query parameter
 		client_id = request.args.get('client_id', type=int)
 		
@@ -143,11 +144,10 @@ class SecureAggregationServer:
 		with self.lock:
 			if client_id not in self.roundi_responders[1]:
 				response = response_if_not_responder(client_id, 1)
-			if client_id in self.roundi_responders[2]:
-				# TODO: Build round 2 response with aggregated ciphertexts
-				response = {'status': 'ok', 'message': 'Round 2 complete', 'responders': list(self.roundi_responders[2])}
-			else:
+			elif client_id not in self.roundi_responders[2]:
 				response = response_if_not_responder(client_id, 2)
+			else:
+				response = build_sharekeys_response(client_id, self.received_data, self.roundi_responders[2])
 		return jsonify(response)
 
 	def run(self, host='127.0.0.1', port=5000, debug=False):

@@ -9,7 +9,7 @@ import base64
 import requests
 import time
 import re
-from config import DEBUG, DERIVED_KEY_LENGTH, MAX_POLLS, POLL_INTERVALS
+from config import DEBUG, DERIVED_KEY_LENGTH, MAX_POLLS, POLL_INTERVALS, DEBUG_TESTING_DELAY, DEBUG_TESTING_DELAY_TIME, DEBUG_TESTING_DELAY_CLIENT_ID, DEBUG_TESTING_DELAY_ROUND
 
 
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
@@ -39,7 +39,7 @@ def b64_to_privkey(b64_str: str) -> X25519PrivateKey:
     privkey_decoded = base64.b64decode(b64_str.encode('ascii'))
     return X25519PrivateKey.from_private_bytes(privkey_decoded)
 
-def poll_for_round1_result(client_id: int, server_url: str) -> dict:
+def _poll_for_round1_result(client_id: int, server_url: str) -> dict:
 	"""Poll server for round 1 result.  Result response from server, or None if timeout"""
 	print(f"Client {client_id}: Polling for round 1 result...", flush=True)
 	for poll_count in range(MAX_POLLS[1]):
@@ -58,7 +58,7 @@ def poll_for_round1_result(client_id: int, server_url: str) -> dict:
 	print(f"Client {client_id}: Timeout waiting for round 1 result", flush=True)
 	return None
 
-def poll_for_round2_result(client_id: int, server_url: str) -> dict:
+def _poll_for_round2_result(client_id: int, server_url: str) -> dict:
 	"""Poll server for round 2 result"""
 	print(f"Client {client_id}: Polling for round 2 result...", flush=True)
 	for poll_count in range(MAX_POLLS[2]):
@@ -77,19 +77,27 @@ def poll_for_round2_result(client_id: int, server_url: str) -> dict:
 	print(f"Client {client_id}: Timeout waiting for round 2 result", flush=True)
 	return None
 
-def round1(client_id: int, r1_payload: dict, server_url: str, testing_delay=False):
-	# DEBUG TEST ONLY -- If we are testing delayed responses, sleep here
-	if testing_delay:
-		print(f"DEBUG: Delaying client {client_id} round 1 key advertisement by 3 seconds")
-		time.sleep(3)
+def do_round(client_id: int, round: int, payload: dict, server_url: str) -> dict:
+    if DEBUG_TESTING_DELAY and client_id == DEBUG_TESTING_DELAY_CLIENT_ID and round == DEBUG_TESTING_DELAY_ROUND:
+        print(f"Client {client_id}: Delaying before sending round {round}...", flush=True)
+        time.sleep(DEBUG_TESTING_DELAY_TIME)
 
-	print(f"Client {client_id}: Round 1 POST payload: {r1_payload}", flush=True)
-	r1_resp = requests.post(f"{server_url}/round/1", json=r1_payload)
-	print(f"Client {client_id}: Round 1 immediate response: {r1_resp.json()}", flush=True)
+    print(f"Client {client_id}: Sending round {round} payload: {payload}", flush=True)
+    round_resp = requests.post(f"{server_url}/round/{round}", json=payload)
+    print(f"Client {client_id}: Round {round} immediate response: {round_resp.json()}", flush=True)
 
-    # Poll for round 1 result
-	result = poll_for_round1_result(client_id, server_url)
-	return result
+    result = poll_for_round_result(client_id, round, server_url)
+    return result
+
+def poll_for_round_result(client_id: int, round: int, server_url: str) -> dict:
+    if round == 1:
+          return _poll_for_round1_result(client_id, server_url)
+    elif round == 2:
+          return _poll_for_round2_result(client_id, server_url)
+    else:
+          print(f"Client {client_id}: No polling implemented for round {round}", flush=True)
+          return {}
+
 
 def derive_shared_key(client_id: int, other_id: int, self_c_sec: X25519PrivateKey, other_c_pub: X25519PublicKey) -> bytes:
     shared_key = self_c_sec.exchange(other_c_pub)
