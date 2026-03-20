@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 import threading
 import time
 from config import ROUNDS, DEBUG, MAX_CLIENTS, THRESHOLD_CLIENTS, THRESHOLD_WAITS
-from _server_helper import extract_round_client_id_payload, response_if_not_responder, build_keyset_response, build_sharekeys_response
+from _server_helper import extract_round_client_id_payload, response_if_not_responder, build_keyset_response, build_sharekeys_response, build_masked_input_response
 
 
 class SecureAggregationServer:
@@ -148,6 +148,26 @@ class SecureAggregationServer:
 				response = response_if_not_responder(client_id, 2)
 			else:
 				response = build_sharekeys_response(client_id, self.received_data, self.roundi_responders[2])
+		return jsonify(response)
+
+	def get_round3_result(self):
+		"""Clients poll this endpoint to get the round 3 result once threshold wait completes."""
+		print("Get round 3 result called", flush=True)
+		# Extract client_id from query parameter
+		client_id = request.args.get('client_id', type=int)
+
+		# Wait until round 3 is complete and result is ready
+		self.roundi_responders_locked[3].wait()
+
+		with self.lock:
+			if client_id not in self.roundi_responders[1]:
+				response = response_if_not_responder(client_id, 1)
+			elif client_id not in self.roundi_responders[2]:
+				response = response_if_not_responder(client_id, 2)
+			elif client_id not in self.roundi_responders[3]:
+				response = response_if_not_responder(client_id, 3)
+			else:
+				response = build_masked_input_response(client_id, self.received_data, self.roundi_responders[3])
 		return jsonify(response)
 
 	def run(self, host='127.0.0.1', port=5000, debug=False):
