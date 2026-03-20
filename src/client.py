@@ -8,13 +8,15 @@ from Crypto.Random import get_random_bytes
 from Crypto.Protocol.SecretSharing import Shamir
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from config import ROUNDS, THRESHOLD_CLIENTS, PRG_SEED_SIZE, DEBUG, DEBUG_TESTING_DELAY
-from _client_helper import bencode, jencode_to_bytes, jencode_ciphertexts_for_other_r1r_r2, pubkey_to_b64, b64_to_pubkey, privkey_to_raw_bytes, do_round, derive_shared_key, encrypt_with_derived_key, ids_to_associated_data
+from _client_helper import bencode, field_add, field_negate, jencode_to_bytes, jencode_ciphertexts_for_other_r1r_r2, pubkey_to_b64, b64_to_pubkey, privkey_to_raw_bytes, do_round
+from _client_helper import derive_shared_key, encrypt_with_derived_key, ids_to_associated_data, make_prg, make_prg2, prg_block_to_field_elements, field_negate, field_add
 
 SERVER_URL = 'http://127.0.0.1:5000'
 
 class SecureAggregationClient:
-	def __init__(self, client_id: int):
+	def __init__(self, client_id: int, x_u: list[int]):
 		self.client_id = client_id
+		self.x_u = x_u
 		self.key_c_pub = None
 		self.key_c_sec = None
 		self.key_s_pub = None
@@ -23,7 +25,10 @@ class SecureAggregationClient:
 		self.pubkeys_for_r1r = {}
 		self.symmkeys_for_other_r1r = {}
 		self.s_sec_shares = None
+		self.prg_seed = None
 		self.prg_seed_shares = None
+		self.p_u_v = {}
+		self.round2_responders = list()
 		#self.round_last_completed = -1
 		#self.server_url = server_url
 		#self.session = requests.Session()
@@ -58,6 +63,7 @@ class SecureAggregationClient:
 
 		# Generate random value
 		prg_seed = get_random_bytes(PRG_SEED_SIZE) # b_u in Bhowmick et al. 2017
+		self.prg_seed = prg_seed
 
 		# Shamir sharings of prg_seed and s_sec 
 		prg_seed_shares = Shamir.split(k=THRESHOLD_CLIENTS, 
@@ -115,8 +121,44 @@ class SecureAggregationClient:
 		return r2_payload
 
 	def masked_input_collection(self, ciphertexts_from_server: dict) -> dict:
-		pass
+		self.round2_responders = [int(r2r_str) for r2r_str in ciphertexts_from_server.keys()]
+		self.round2_responders.append(self.client_id) # add self to responders for this round
+		vec_len = len(self.x_u)
 
+		for r2r in self.round2_responders:
+			if r2r == self.client_id:
+				continue
+			other_s_pub = b64_to_pubkey(self.pubkeys_for_r1r[r2r]["key_s_pub"])
+			PRG_block = make_prg(self.client_id, r2r, self.key_s_sec, other_s_pub, vec_len)
+			prg_elements = prg_block_to_field_elements(PRG_block)
+			p_u_v = []
+
+			for elem in prg_elements:
+				if self.client_id > r2r:
+					p_u_v.append(elem)
+				else:
+					p_u_v.append(field_negate(elem))
+					self.p_u_v[r2r] = p_u_v
+
+			PRG_block = make_prg2(self.client_id, r2r, self.prg_seed, vec_len)
+			self.p_u = prg_block_to_field_elements(PRG_block, vec_len)
+
+			y_u = []
+			for j in range(vec_len):
+				val = self.x_u[j] % R
+				val = field_add(val, self.p_u[j])
+				for r2r in self.round2_responders:
+					if r2r != self.client_id:
+						val = field_add(val, self.p_u_v[r2r][j])
+				y_u.append(val)
+
+			r3_payload = {
+				'client_id': self.client_id,
+				'round': 3,
+				'payload': y_u
+			}
+			return r3_payload
+		
 	def unmasking(self, users_from_server: dict) -> dict:
 		pass
 
@@ -127,11 +169,15 @@ class SecureAggregationClient:
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--id', type=int, required=True, help='Client id (1..i for testing)')
+	parser.add_argument('--vec', type=str, required="1,2,3", help='Input vector as comma-separated integers, e.g. "1,2,3"')
 	args = parser.parse_args()
 	client_id = args.id
 
+	x_u = [int(x) for x in args.vec.split(",")]
+	print(f"Client {client_id} starting with input vector {x_u}", flush=True)
+
 	# Setup: Initialize client
-	client = SecureAggregationClient(client_id=client_id)
+	client = SecureAggregationClient(client_id=client_id, x_u=x_u)
 
 	# Round 1: Advertise Keys
 	r1_payload = client.advertise_keys()
@@ -150,9 +196,14 @@ def main():
 	r2_response = do_round(client_id, 2, r2_payload, SERVER_URL)
 	print(f"Client {client_id} round 2 response: {r2_response}", flush=True)
 
-	
+	#Round 3: Masked Input Collection
+	r3_payload = client.masked_input_collection(r2_response)
+	print(f"Client {client_id} round 3 payload: {r3_payload}", flush=True)
+	r3_response = do_round(client_id, 3, r3_payload, SERVER_URL)
+	print(f"Client {client_id} round 3 response: {r3_response}", flush=True)
+
 	# Remaining rounds
-	for round in range(3, ROUNDS+1):
+	for round in range(4, ROUNDS+1):
 		payload = {'client_id': client_id, 'round': round, 'payload': f'Hello from client {client_id} round {round}'}
 		print(f"Client {client_id}: Sending round {round}...", flush=True)
 		resp = requests.post(f"{SERVER_URL}/round/{round}", json=payload)
