@@ -7,7 +7,7 @@ import json
 from Crypto.Random import get_random_bytes
 from Crypto.Protocol.SecretSharing import Shamir
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-from config import ROUNDS, THRESHOLD_CLIENTS, PRG_SEED_SIZE, DEBUG, DEBUG_TESTING_DELAY
+from config import ROUNDS, THRESHOLD_CLIENTS, PRG_SEED_SIZE, DEBUG, DEBUG_TESTING_DELAY, FIELD_ELEMENT_SIZE, R
 from _client_helper import bencode, field_add, field_negate, jencode_to_bytes, jencode_ciphertexts_for_other_r1r_r2, pubkey_to_b64, b64_to_pubkey, privkey_to_raw_bytes, do_round
 from _client_helper import derive_shared_key, encrypt_with_derived_key, ids_to_associated_data, make_prg, make_prg2, prg_block_to_field_elements, field_negate, field_add
 
