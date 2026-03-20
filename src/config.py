@@ -31,3 +31,7 @@ PRG_SEED_SIZE = 16
 # size of b_u in Bhowmick et al. 2017
 
 DERIVED_KEY_LENGTH = 32
+ 
+# We work on the field defined by prime p = 2^128 - 159, so field elements are 16 bytes long (128 bits)
+FIELD_ELEMENT_SIZE = 16
+R = 2**128 - 159
