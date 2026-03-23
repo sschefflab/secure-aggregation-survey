@@ -116,11 +116,12 @@ def poll_for_round_result(client_id: int, round: int, server_url: str) -> dict:
 
 def derive_shared_key(client_id: int, other_id: int, self_c_sec: X25519PrivateKey, other_c_pub: X25519PublicKey) -> bytes:
     shared_key = self_c_sec.exchange(other_c_pub)
+    id_low, id_high = min(client_id, other_id), max(client_id, other_id)
     derived_key = HKDF(
         algorithm=hashes.SHA256(),
         length=DERIVED_KEY_LENGTH,
         salt=None,
-        info=b'key-agreement-self'+str(client_id).encode('ascii')+b'-other'+str(other_id).encode('ascii'),
+        info=b'key-agreement-pair-'+str(id_low).encode('ascii')+b'-'+str(id_high).encode('ascii'),
     ).derive(shared_key)
     return derived_key
 
@@ -183,6 +184,9 @@ def jencode_to_bytes(json_data: dict) -> bytes:
 
 def bytes_to_json(data_bytes: bytes) -> dict:  
     return json.loads(data_bytes.decode('utf-8'))
+
+def jdecode_from_bytes(data_bytes: bytes) -> dict:
+    return bytes_to_json(data_bytes)
 
 def jencode_to_b64str(json_data: dict) -> str:
     return bencode(json.dumps(json_data).encode('utf-8'))

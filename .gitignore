@@ -16,3 +16,6 @@ __pycache__/
 
 # BACKUP folder
 BACKUP/
+
+#dont push test files yet
+src/tests/*

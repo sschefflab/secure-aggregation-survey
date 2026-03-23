@@ -9,9 +9,16 @@ cd "$ROOT_DIR"
 SRC_DIR="$ROOT_DIR/src"
 LOG_DIR="$ROOT_DIR/log"
 
+mkdir -p "$LOG_DIR"
+
+PYTHON_BIN="$SRC_DIR/.venv/bin/python"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="python3"
+fi
+
 # Start server
 echo "Starting server, logging to $LOG_DIR/server.log..."
-python3 "$SRC_DIR/server.py" > $LOG_DIR/server.log 2>&1 &
+"$PYTHON_BIN" "$SRC_DIR/server.py" > "$LOG_DIR/server.log" 2>&1 &
 SERVER_PID=$!
 
 # Wait
@@ -21,7 +28,7 @@ sleep 1
 CLIENT_PIDS=""
 for i in 1 2 3; do
   echo "Starting client $i, logging to $LOG_DIR/client${i}.log..."
-  python3 "$SRC_DIR/client.py" --id "$i" > "$LOG_DIR/client${i}.log" 2>&1 &
+  "$PYTHON_BIN" "$SRC_DIR/client.py" --id "$i" > "$LOG_DIR/client${i}.log" 2>&1 &
   CLIENT_PIDS="$CLIENT_PIDS $!"
   sleep 0.1
 done
