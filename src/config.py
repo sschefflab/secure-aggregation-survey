@@ -8,11 +8,11 @@ DEBUG_TESTING_DELAY_TIME = 6
 
 ROUNDS = 4
 
-MAX_CLIENTS = 3 
+MAX_CLIENTS = 5 
 # for demo only! Should really be more like 200
 # n in Bonawitz et al. 2017
 
-THRESHOLD_CLIENTS = 2 
+THRESHOLD_CLIENTS = 3 
 # for demo only! Should really be more like 100
 # t in Bonawitz et al. 2017
 
