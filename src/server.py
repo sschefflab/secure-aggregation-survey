@@ -4,7 +4,7 @@ import threading
 import time
 from config import ROUNDS, DEBUG, MAX_CLIENTS, THRESHOLD_CLIENTS, THRESHOLD_WAITS
 from _server_helper import extract_round_client_id_payload, response_if_not_responder, build_keyset_response, build_sharekeys_response, build_masked_input_response
-
+from _server_helper import compute_final_aggregate
 
 class SecureAggregationServer:
 	"""Server for secure aggregation protocol."""
@@ -18,6 +18,7 @@ class SecureAggregationServer:
 		self.roundi_threshold_met = {r: threading.Event() for r in range(1, ROUNDS+1)} # Event to signal when threshold is reached
 		self.roundi_responders_locked = {r: threading.Event() for r in range(1, ROUNDS+1)} # Event to signal when threshold wait period ENDS
 		self.roundi_result = {r: None for r in range(1, ROUNDS+1)} # Computed result after each round's threshold wait
+		self.final_aggregate = None # Final aggregate result after round 4
 		self._setup_routes() # Set up flask routes (called by Flask app setup)
 	
 	# TODO: Currently, round_num  (sent as argument in POST) is redundant with "round" field sent in JSON body; we probably don't need both
@@ -26,7 +27,8 @@ class SecureAggregationServer:
 		self.app.route('/round/<int:round_num>', methods=['POST'])(self.handle_round)
 		self.app.route('/round1/result', methods=['GET'])(self.get_round1_result)
 		self.app.route('/round2/result', methods=['GET'])(self.get_round2_result)
-
+		self.app.route('/round3/result', methods=['GET'])(self.get_round3_result)
+		self.app.route('/round4/result', methods=['GET'])(self.get_round4_result)
 	
 	def handle_round(self, round_num: int):
 		"""Handle incoming round data from clients"""
@@ -47,6 +49,10 @@ class SecureAggregationServer:
 				pre_check_response = self._check_round1(client_id)
 			elif round == 2:
 				pre_check_response = self._check_round2(client_id)
+			elif round == 3:
+				pre_check_response = self._check_round3(client_id)
+			elif round == 4:
+				pre_check_response = self._check_round4(client_id)
 			
 			# If pre-check failed, return the error response
 			if pre_check_response is not None:
@@ -69,6 +75,24 @@ class SecureAggregationServer:
 			return {'status': 'error', 'message': 'Round 2 received before round 1 threshold wait completed.'}
 		elif client_id not in self.roundi_responders[1]:
 			return response_if_not_responder(client_id, 1)
+		return None
+	
+	def _check_round3(self, client_id: int) -> dict:
+		"""Pre-check for round 3. Returns None if checks pass, or error response if they fail."""
+		# Check if client participated in round 2
+		if not self.roundi_responders_locked[2].is_set():
+			return {'status': 'error', 'message': 'Round 3 received before round 2 threshold wait completed.'}
+		elif client_id not in self.roundi_responders[2]:
+			return response_if_not_responder(client_id, 2)
+		return None
+	
+	def _check_round4(self, client_id: int) -> dict:
+		"""Pre-check for round 4. Returns None if checks pass, or error response if they fail."""
+		# Check if client participated in round 3
+		if not self.roundi_responders_locked[3].is_set():
+			return {'status': 'error', 'message': 'Round 4 received before round 3 threshold wait completed.'}
+		elif client_id not in self.roundi_responders[3]:
+			return response_if_not_responder(client_id, 3)
 		return None
 	
 	def _collect_round_response(self, round: int, client_id: int, payload) -> dict:
@@ -168,6 +192,29 @@ class SecureAggregationServer:
 				response = response_if_not_responder(client_id, 3)
 			else:
 				response = build_masked_input_response(client_id, self.received_data, self.roundi_responders[3])
+		return jsonify(response)
+	
+	def get_round4_result(self):
+		"""Clients poll this endpoint to get the round 4 result once threshold wait completes."""
+		print("Get round 4 result called", flush=True)
+		# Extract client_id from query parameter
+		client_id = request.args.get('client_id', type=int)
+
+		# Wait until round 4 is complete and result is ready
+		self.roundi_responders_locked[4].wait()
+
+		with self.lock:
+			if self.final_aggregate is None:
+				response = {'status': 'error', 'message': 'Final aggregate not ready yet.'}
+				some_y = next(iter(self.received_data[3].values()))
+				vec_len = len(some_y)
+				self.final_aggregate = compute_final_aggregate(self.received_data, self.roundi_responders[2], self.roundi_responders[3], self.received_data[4], vec_len)
+			if client_id not in self.roundi_responders[3]:
+				response = response_if_not_responder(client_id, 3)
+			elif client_id not in self.roundi_responders[4]:
+				response = response_if_not_responder(client_id, 4)
+			else:
+				response = {'status': 'ok', 'final_aggregate': self.final_aggregate}
 		return jsonify(response)
 
 	def run(self, host='127.0.0.1', port=5000, debug=False):

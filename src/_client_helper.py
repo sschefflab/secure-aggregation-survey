@@ -92,6 +92,42 @@ def _poll_for_round2_result(client_id: int, server_url: str) -> dict:
 	print(f"Client {client_id}: Timeout waiting for round 2 result", flush=True)
 	return None
 
+def _poll_for_round3_result(client_id: int, server_url: str) -> dict:
+    """Poll server for round 3 result"""
+    print(f"Client {client_id}: Polling for round 3 result...", flush=True)
+    for poll_count in range(MAX_POLLS[3]):
+        try:
+            result_resp = requests.get(f"{server_url}/round3/result?client_id={client_id}", timeout=5)
+            if result_resp.status_code == 200:
+                print(f"Client {client_id}: Got round 3 result after {poll_count} polls", flush=True)
+                return result_resp.json()
+        except requests.exceptions.Timeout:
+            pass  # Continue polling
+        except requests.exceptions.RequestException as e:
+            print(f"Client {client_id}: Error polling: {e}", flush=True)
+        
+        time.sleep(POLL_INTERVALS[3])
+    
+    print(f"Client {client_id}: Timeout waiting for round 3 result", flush=True)
+    return None
+
+def _poll_for_round4_result(client_id: int, server_url: str) -> dict:
+    """Poll server for round 4 result"""
+    print(f"Client {client_id}: Polling for round 4 result...", flush=True)
+    for poll_count in range(MAX_POLLS[4]):
+        try:
+            result_resp = requests.get(f"{server_url}/round4/result?client_id={client_id}", timeout=5)
+            if result_resp.status_code == 200:
+                print(f"Client {client_id}: Got round 4 result after {poll_count} polls", flush=True)
+                return result_resp.json()
+        except requests.exceptions.Timeout:
+            pass  # Continue polling
+        except requests.exceptions.RequestException as e:
+            print(f"Client {client_id}: Error polling: {e}", flush=True)
+        time.sleep(POLL_INTERVALS[4])
+    print(f"Client {client_id}: Timeout waiting for round 4 result", flush=True)
+    return None
+
 def do_round(client_id: int, round: int, payload: dict, server_url: str) -> dict:
     if DEBUG_TESTING_DELAY and client_id == DEBUG_TESTING_DELAY_CLIENT_ID and round == DEBUG_TESTING_DELAY_ROUND:
         print(f"Client {client_id}: Delaying before sending round {round}...", flush=True)
@@ -109,6 +145,10 @@ def poll_for_round_result(client_id: int, round: int, server_url: str) -> dict:
           return _poll_for_round1_result(client_id, server_url)
     elif round == 2:
           return _poll_for_round2_result(client_id, server_url)
+    elif round == 3:
+          return _poll_for_round3_result(client_id, server_url)
+    elif round == 4:
+          return _poll_for_round4_result(client_id, server_url)
     else:
           print(f"Client {client_id}: No polling implemented for round {round}", flush=True)
           return {}

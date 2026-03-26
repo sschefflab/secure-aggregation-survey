@@ -220,8 +220,40 @@ class SecureAggregationClient:
        return r3_payload
       
    def unmasking(self, users_from_server: dict) -> dict:
-       pass
+    self.round3_responders = [int(r3r_str) for r3r_str in users_from_server.keys()]
+    
+    #Determine who dropped (in U2 but not in U3)
+    dropped = set(self.round2_responders) - set(self.round3_responders)
+    survived = set(self.round3_responders)
 
+    shares_to_send = {}
+    for v in dropped:
+        if v in self.received_s_sec_shares:
+            share1, share2 = self.received_s_sec_shares[v]
+            shares_to_send[str(v)] = {
+                'type': 'dropped',
+                's_sec_share':[
+                    [share1[0], bencode(share1[1])],
+                    [share2[0], bencode(share2[1])]
+                ]
+            }
+    
+    for v in survived:
+        if v == self.client_is:
+            continue
+        if v in self.received_prg_seed_shares:
+            share = self.received_prg_seed_shares[v]
+            shares_to_send[str(v)] = {
+                'type': 'survived',
+                'prg_seed_share': [share[0], bencode(share[1])]
+            }
+    
+    r4_payload = {
+        'client_id': self.client_id,
+        'round': 4,
+        'payload': shares_to_send
+    }
+    return r4_payload
 
 
 
@@ -266,14 +298,19 @@ def main():
    r3_response = do_round(client_id, 3, r3_payload, SERVER_URL)
    print(f"Client {client_id} round 3 response: {r3_response}", flush=True)
 
+   #Round 4: Unmasking
+   r4_payload = client.unmasking(r3_response)
+   print(f"Client {client_id} round 4 payload: {r4_payload}", flush=True)
+   r4_response = do_round(client_id, 4, r4_payload, SERVER_URL)
+   print(f"Client {client_id} round 4 response: {r4_response}", flush=True) #this should print out the final answer
 
    # Remaining rounds
-   for round in range(4, ROUNDS+1):
-       payload = {'client_id': client_id, 'round': round, 'payload': f'Hello from client {client_id} round {round}'}
-       print(f"Client {client_id}: Sending round {round}...", flush=True)
-       resp = requests.post(f"{SERVER_URL}/round/{round}", json=payload)
-       print(f"Client {client_id} round {round} response: {resp.json()}", flush=True)
-       time.sleep(0.2)
+#    for round in range(4, ROUNDS+1):
+#        payload = {'client_id': client_id, 'round': round, 'payload': f'Hello from client {client_id} round {round}'}
+#        print(f"Client {client_id}: Sending round {round}...", flush=True)
+#        resp = requests.post(f"{SERVER_URL}/round/{round}", json=payload)
+#        print(f"Client {client_id} round {round} response: {resp.json()}", flush=True)
+#        time.sleep(0.2)
 
 
 if __name__ == '__main__':

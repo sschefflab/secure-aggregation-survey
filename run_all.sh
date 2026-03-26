@@ -28,7 +28,7 @@ sleep 1
 CLIENT_PIDS=""
 for i in 1 2 3; do
   echo "Starting client $i, logging to $LOG_DIR/client${i}.log..."
-  "$PYTHON_BIN" "$SRC_DIR/client.py" --id "$i" > "$LOG_DIR/client${i}.log" 2>&1 &
+  "$PYTHON_BIN" "$SRC_DIR/client.py" --id "$i" --vec "1,2,3" > "$LOG_DIR/client${i}.log" 2>&1 &
   CLIENT_PIDS="$CLIENT_PIDS $!"
   sleep 0.1
 done
