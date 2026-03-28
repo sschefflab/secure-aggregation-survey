@@ -8,7 +8,7 @@ DEBUG_TESTING_DELAY_TIME = 6
 
 ROUNDS = 4
 
-MAX_CLIENTS = 5 
+MAX_CLIENTS = 10 
 # for demo only! Should really be more like 200
 # n in Bonawitz et al. 2017
 

@@ -4,6 +4,7 @@ import requests
 import argparse
 import time
 import json
+import sys
 from Crypto.Random import get_random_bytes
 from Crypto.Protocol.SecretSharing import Shamir
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -57,6 +58,9 @@ class SecureAggregationClient:
 
 
    def share_keys(self, r1_response: dict) -> dict:
+       if r1_response is None:
+           print(f"Client {self.client_id} did not receive any response from server for round 1, aborting share keys.", flush=True)
+           sys.exit(1)       
 
 
        # Set clients that responded in r1 and their keys
@@ -136,6 +140,10 @@ class SecureAggregationClient:
 
 
    def masked_input_collection(self, ciphertexts_from_server: dict) -> dict:
+       if ciphertexts_from_server is None:
+           print(f"Client {self.client_id} did not receive any ciphertexts from server for round 3, aborting masked input collection.", flush=True)
+           sys.exit(1)
+        
        self.round2_responders = [int(r2r_str) for r2r_str in ciphertexts_from_server.keys()]
        self.round2_responders.append(self.client_id) # add self to responders for this round
        vec_len = len(self.x_u)
@@ -220,6 +228,10 @@ class SecureAggregationClient:
        return r3_payload
       
    def unmasking(self, users_from_server: dict) -> dict:
+    if users_from_server is None:
+        print(f"Client {self.client_id} did not receive any users from server for round 4, aborting unmasking.", flush=True)
+        sys.exit(1)
+
     self.round3_responders = [int(r3r_str) for r3r_str in users_from_server.keys()]
     
     #Determine who dropped (in U2 but not in U3)
@@ -283,6 +295,11 @@ def main():
    if 'status' in r1_response and r1_response['status'] == 'nonparticipant':
        print(f"Client {client_id} is a nonparticipant, aborting.", flush=True)
        return
+   
+   #abort if client id is 4 or 5
+   if client_id in [9, 10]:
+       print(f"Client {client_id} is dropping out.", flush=True)
+       return
 
 
    # Round 2: Share Keys
@@ -291,12 +308,21 @@ def main():
    r2_response = do_round(client_id, 2, r2_payload, SERVER_URL)
    print(f"Client {client_id} round 2 response: {r2_response}", flush=True)
 
+   #abort if client id is 4 or 5
+   if client_id in [7, 8]:
+       print(f"Client {client_id} is dropping out.", flush=True)
+       return
 
    #Round 3: Masked Input Collection
    r3_payload = client.masked_input_collection(r2_response)
    print(f"Client {client_id} round 3 payload: {r3_payload}", flush=True)
    r3_response = do_round(client_id, 3, r3_payload, SERVER_URL)
    print(f"Client {client_id} round 3 response: {r3_response}", flush=True)
+
+   #abort if client id is 4 or 5
+   if client_id in [6]:
+       print(f"Client {client_id} is dropping out.", flush=True)
+       return
 
    #Round 4: Unmasking
    r4_payload = client.unmasking(r3_response)
