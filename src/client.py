@@ -37,6 +37,9 @@ class SecureAggregationClient:
        self.received_s_sec_shares = {}   # {sender_id: ((x1, y1), (x2, y2))}
        self.received_prg_seed_shares = {} # {sender_id: (x, y)}
 
+       self.key_d_pub = None
+       self.key_d_sec = None
+
 
    def advertise_keys(self) -> dict:
        self.key_c_sec = X25519PrivateKey.generate()
@@ -45,6 +48,10 @@ class SecureAggregationClient:
 
        self.key_s_sec = X25519PrivateKey.generate()
        self.key_s_pub = self.key_s_sec.public_key()
+
+       # Generate a signature sigma_u = SIG.sign(d_u_sk, c_u_pk||s_u_pk)
+       
+
 
 
        return {
@@ -273,6 +280,12 @@ def main():
    parser = argparse.ArgumentParser()
    parser.add_argument('--id', type=int, required=True, help='Client id (1..i for testing)')
    parser.add_argument('--vec', type=str, required="1,2,3", help='Input vector as comma-separated integers, e.g. "1,2,3"')
+   # each user rrecieve their signing key from the trusted third party
+   parser.add_argument('--signingkey', type=str, help='Path to file containing clients signing key for active adversary')
+   #each user recieves the verification keys d_u_pk bound to each user iednitity v
+   parser.add_argument('--verificationkeys', type=str, help='Path to file containing dict of verification keys for all users for active adversary')
+
+
    args = parser.parse_args()
    client_id = args.id
 
