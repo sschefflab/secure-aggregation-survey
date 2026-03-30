@@ -27,6 +27,13 @@ def field_add(a:int, b:int) -> int:
 def prg_block_to_field_elements(prg_block: bytes, vec_len: int) -> list[int]:
      return [bytes_to_field_element(prg_block[j*FIELD_ELEMENT_SIZE: (j+1)*FIELD_ELEMENT_SIZE]) for j in range(vec_len)]
 
+def pubkey_to_bytes(pubkey: X25519PublicKey) -> bytes:
+    return pubkey.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw
+    )
+
+
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
     pubkey_raw = pubkey.public_bytes(
         encoding=serialization.Encoding.Raw,

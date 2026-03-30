@@ -61,7 +61,7 @@ def build_masked_input_response(client_id: int, received_data: dict[int, dict[in
    return {str(uid): {} for uid in round3_responders}
 
 
-def compute_final_aggregate(received_data, round2_responders, round3_responders, round4_data, vec_len):
+def compute_final_aggregate(received_data, round2_responders, round3_responders, round5_data, vec_len):
    """
    Compute the final aggregate: z = sum(y_u) - sum(p_u) - sum(p_{s,d})
    where s are surviving users and d are dropped users.
