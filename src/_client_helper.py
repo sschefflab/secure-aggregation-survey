@@ -2,7 +2,7 @@
 import json
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from Crypto.Random import get_random_bytes
 import base64
@@ -10,7 +10,22 @@ import requests
 import time
 import re
 from config import DEBUG, DERIVED_KEY_LENGTH, MAX_POLLS, POLL_INTERVALS, DEBUG_TESTING_DELAY, DEBUG_TESTING_DELAY_TIME, DEBUG_TESTING_DELAY_CLIENT_ID, DEBUG_TESTING_DELAY_ROUND
+from config import  FIELD_ELEMENT_SIZE, R
 
+def bytes_to_field_element(b: bytes) -> int:
+     return int.from_bytes(b, byteorder='big') % R
+
+def field_elements_to_bytes(x: int) -> bytes:
+     return (x % R).to_bytes(FIELD_ELEMENT_SIZE, byteorder='big')
+
+def field_negate(x : int) -> int:
+     return (R-x) % R
+
+def field_add(a:int, b:int) -> int:
+     return (a+b) % R
+
+def prg_block_to_field_elements(prg_block: bytes, vec_len: int) -> list[int]:
+     return [bytes_to_field_element(prg_block[j*FIELD_ELEMENT_SIZE: (j+1)*FIELD_ELEMENT_SIZE]) for j in range(vec_len)]
 
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
     pubkey_raw = pubkey.public_bytes(
@@ -77,6 +92,42 @@ def _poll_for_round2_result(client_id: int, server_url: str) -> dict:
 	print(f"Client {client_id}: Timeout waiting for round 2 result", flush=True)
 	return None
 
+def _poll_for_round3_result(client_id: int, server_url: str) -> dict:
+    """Poll server for round 3 result"""
+    print(f"Client {client_id}: Polling for round 3 result...", flush=True)
+    for poll_count in range(MAX_POLLS[3]):
+        try:
+            result_resp = requests.get(f"{server_url}/round3/result?client_id={client_id}", timeout=5)
+            if result_resp.status_code == 200:
+                print(f"Client {client_id}: Got round 3 result after {poll_count} polls", flush=True)
+                return result_resp.json()
+        except requests.exceptions.Timeout:
+            pass  # Continue polling
+        except requests.exceptions.RequestException as e:
+            print(f"Client {client_id}: Error polling: {e}", flush=True)
+        
+        time.sleep(POLL_INTERVALS[3])
+    
+    print(f"Client {client_id}: Timeout waiting for round 3 result", flush=True)
+    return None
+
+def _poll_for_round4_result(client_id: int, server_url: str) -> dict:
+    """Poll server for round 4 result"""
+    print(f"Client {client_id}: Polling for round 4 result...", flush=True)
+    for poll_count in range(MAX_POLLS[4]):
+        try:
+            result_resp = requests.get(f"{server_url}/round4/result?client_id={client_id}", timeout=5)
+            if result_resp.status_code == 200:
+                print(f"Client {client_id}: Got round 4 result after {poll_count} polls", flush=True)
+                return result_resp.json()
+        except requests.exceptions.Timeout:
+            pass  # Continue polling
+        except requests.exceptions.RequestException as e:
+            print(f"Client {client_id}: Error polling: {e}", flush=True)
+        time.sleep(POLL_INTERVALS[4])
+    print(f"Client {client_id}: Timeout waiting for round 4 result", flush=True)
+    return None
+
 def do_round(client_id: int, round: int, payload: dict, server_url: str) -> dict:
     if DEBUG_TESTING_DELAY and client_id == DEBUG_TESTING_DELAY_CLIENT_ID and round == DEBUG_TESTING_DELAY_ROUND:
         print(f"Client {client_id}: Delaying before sending round {round}...", flush=True)
@@ -94,6 +145,10 @@ def poll_for_round_result(client_id: int, round: int, server_url: str) -> dict:
           return _poll_for_round1_result(client_id, server_url)
     elif round == 2:
           return _poll_for_round2_result(client_id, server_url)
+    elif round == 3:
+          return _poll_for_round3_result(client_id, server_url)
+    elif round == 4:
+          return _poll_for_round4_result(client_id, server_url)
     else:
           print(f"Client {client_id}: No polling implemented for round {round}", flush=True)
           return {}
@@ -101,13 +156,29 @@ def poll_for_round_result(client_id: int, round: int, server_url: str) -> dict:
 
 def derive_shared_key(client_id: int, other_id: int, self_c_sec: X25519PrivateKey, other_c_pub: X25519PublicKey) -> bytes:
     shared_key = self_c_sec.exchange(other_c_pub)
+    id_low, id_high = min(client_id, other_id), max(client_id, other_id)
     derived_key = HKDF(
         algorithm=hashes.SHA256(),
         length=DERIVED_KEY_LENGTH,
         salt=None,
-        info=b'key-agreement-self'+str(client_id).encode('ascii')+b'-other'+str(other_id).encode('ascii'),
+        info=b'key-agreement-pair-'+str(id_low).encode('ascii')+b'-'+str(id_high).encode('ascii'),
     ).derive(shared_key)
     return derived_key
+
+def make_prg(client_id: int, other_id: int, self_s_sec: X25519PrivateKey, other_s_pub: X25519PublicKey, vec_len: int) -> bytes:
+     shared_key = self_s_sec.exchange(other_s_pub)
+     id_low, id_high = min(client_id, other_id), max(client_id, other_id)
+     return HKDFExpand(algorithm=hashes.SHA256(), length=vec_len*FIELD_ELEMENT_SIZE, info=b'prg-pair-'+str(id_low).encode('ascii')+b'-'+str(id_high).encode
+                            ('ascii')).derive(shared_key)
+     
+def make_prg2(client_id: int, other_id:int, prg_seed: bytes, vec_len:int) -> bytes:
+     PRG_block = HKDF(
+          algorithm=hashes.SHA256(),
+          length=vec_len*FIELD_ELEMENT_SIZE,
+          salt=None,
+          info=b'prg-seed-self'+str(client_id).encode('ascii')+b'-other'+str(other_id).encode('ascii'),
+     ).derive(prg_seed)
+     return PRG_block
 
 def encrypt_with_derived_key(derived_key: bytes, plaintext: bytes,
                              associated_data: bytes) -> tuple[bytes, bytes]:
@@ -153,6 +224,9 @@ def jencode_to_bytes(json_data: dict) -> bytes:
 
 def bytes_to_json(data_bytes: bytes) -> dict:  
     return json.loads(data_bytes.decode('utf-8'))
+
+def jdecode_from_bytes(data_bytes: bytes) -> dict:
+    return bytes_to_json(data_bytes)
 
 def jencode_to_b64str(json_data: dict) -> str:
     return bencode(json.dumps(json_data).encode('utf-8'))
