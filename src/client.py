@@ -14,11 +14,7 @@ from _client_helper import bencode, bdecode, field_add, field_negate, jencode_to
 from _client_helper import derive_shared_key, encrypt_with_derived_key, decrypt_with_derived_key, ids_to_associated_data, make_prg, make_prg2, prg_block_to_field_elements, field_negate, field_add
 from _client_helper import pubkey_to_bytes
 
-
 SERVER_URL = 'http://127.0.0.1:5000'
-
-
-
 
 class SecureAggregationClient:
    def __init__(self, client_id: int, x_u: list[int], signingkeyfile: str = None, verificationkeysfile: str = None):

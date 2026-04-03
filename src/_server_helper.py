@@ -5,9 +5,6 @@ from config import ROUNDS, DEBUG, MAX_CLIENTS, THRESHOLD_CLIENTS
 from Crypto.Protocol.SecretSharing import Shamir
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-
-
-
 def extract_round_client_id_payload(data: dict, expected_round: int) -> tuple[int, int, dict]:
   # Extract round number from JSON body
   round = data.get('round')

@@ -37,9 +37,7 @@ class SecureAggregationServer:
        # Get data from the request
        data = request.get_json(force=True)
 
-
        (round, client_id, payload) = extract_round_client_id_payload(data, expected_round=round_num)
-
 
        with self.lock:
            self.received_data[round][client_id] = payload

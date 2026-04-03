@@ -39,9 +39,6 @@ def pubkey_to_bytes(pubkey: X25519PublicKey) -> bytes:
        format=serialization.PublicFormat.Raw
    )
 
-
-
-
 def pubkey_to_b64(pubkey: X25519PublicKey) -> str:
    pubkey_raw = pubkey.public_bytes(
        encoding=serialization.Encoding.Raw,

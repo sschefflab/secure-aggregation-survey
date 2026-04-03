@@ -2,7 +2,6 @@
 # Run Flask server and three clients, collecting logs.
 set -euo pipefail
 
-
 # Set ROOT_DIR to absolute path of directory containing this script
 # Set SRC_DIR to ROOT_DIR/src
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -10,9 +9,7 @@ cd "$ROOT_DIR"
 SRC_DIR="$ROOT_DIR/src"
 LOG_DIR="$ROOT_DIR/log"
 
-
 mkdir -p "$LOG_DIR"
-
 
 PYTHON_BIN="$SRC_DIR/.venv/bin/python"
 if [[ ! -x "$PYTHON_BIN" ]]; then

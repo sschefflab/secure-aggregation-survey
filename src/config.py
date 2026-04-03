@@ -7,9 +7,7 @@ DEBUG_TESTING_DELAY_CLIENT_ID = 1
 DEBUG_TESTING_DELAY_ROUND = 1
 DEBUG_TESTING_DELAY_TIME = 6
 
-
 ROUNDS = 5
-
 
 MAX_CLIENTS = 10
 # for demo only! Should really be more like 200
