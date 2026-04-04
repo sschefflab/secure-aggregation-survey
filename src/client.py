@@ -53,11 +53,13 @@ class SecureAggregationClient:
         self,
         client_id: int,
         x_u: list[int],
+        isactive: bool = False,
         signingkeyfile: str = None,
         verificationkeysfile: str = None,
     ):
         self.client_id = client_id
         self.x_u = x_u
+        self.isactive = isactive
         self.key_c_pub = None
         self.key_c_sec = None
         self.key_s_pub = None
@@ -77,20 +79,21 @@ class SecureAggregationClient:
         self.key_d_pub = None
         self.key_d_sec = None
         # get signing and verfiication keys for active adversary
-        if signingkeyfile is not None and verificationkeysfile is not None:
-            with open(signingkeyfile, "rb") as f:
-                self.signingkey = ed25519.Ed25519PrivateKey.from_private_bytes(f.read())
-            self.verificationkeys = {}
-            # verfication keys: {"id": hex_public_key}
-            # Simply load using json.load
-            with open(verificationkeysfile, "rb") as f:
-                verification_keys = json.load(f)
-                for client_id, pubkey_hex in verification_keys.items():
-                    self.verificationkeys[int(client_id)] = (
-                        ed25519.Ed25519PublicKey.from_public_bytes(
-                            bytes.fromhex(pubkey_hex)
+        if self.isactive:
+            if signingkeyfile is not None and verificationkeysfile is not None:
+                with open(signingkeyfile, "rb") as f:
+                    self.signingkey = ed25519.Ed25519PrivateKey.from_private_bytes(f.read())
+                self.verificationkeys = {}
+                # verfication keys: {"id": hex_public_key}
+                # Simply load using json.load
+                with open(verificationkeysfile, "rb") as f:
+                    verification_keys = json.load(f)
+                    for client_id, pubkey_hex in verification_keys.items():
+                        self.verificationkeys[int(client_id)] = (
+                            ed25519.Ed25519PublicKey.from_public_bytes(
+                                bytes.fromhex(pubkey_hex)
+                            )
                         )
-                    )
 
     def advertise_keys(self) -> dict:
         self.key_c_sec = X25519PrivateKey.generate()
@@ -99,19 +102,21 @@ class SecureAggregationClient:
         self.key_s_sec = X25519PrivateKey.generate()
         self.key_s_pub = self.key_s_sec.public_key()
 
-        # Generate a signature sigma_u = SIG.sign(d_u_sk, c_u_pk||s_u_pk)
-        message = pubkey_to_bytes(self.key_c_pub) + pubkey_to_bytes(self.key_s_pub)
-        signature = self.signingkey.sign(message)
-
-        return {
+        payload = {
             "client_id": self.client_id,
             "round": 1,
             "payload": {
                 "key_c_pub": pubkey_to_b64(self.key_c_pub),
                 "key_s_pub": pubkey_to_b64(self.key_s_pub),
-                "signature": signature.hex(),
             },
         }
+        # Generate a signature sigma_u = SIG.sign(d_u_sk, c_u_pk||s_u_pk)
+        if self.isactive:
+            message = pubkey_to_bytes(self.key_c_pub) + pubkey_to_bytes(self.key_s_pub)
+            signature = self.signingkey.sign(message)
+            payload["payload"]["signature"] = signature.hex()
+
+        return payload
 
     def share_keys(self, r1_response: dict) -> dict:
         if r1_response is None:
@@ -128,22 +133,23 @@ class SecureAggregationClient:
         }  # dict with int keys instead of str
 
         # verify signatures of other users' keys
-        for r1r in self.round1_responders:
-            if r1r == self.client_id:
-                continue
-            r1r_data = self.pubkeys_for_r1r[r1r]
-            r1r_c_pub = b64_to_pubkey(r1r_data["key_c_pub"])
-            r1r_s_pub = b64_to_pubkey(r1r_data["key_s_pub"])
-            r1r_signature = bytes.fromhex(r1r_data["signature"])
-            message = pubkey_to_bytes(r1r_c_pub) + pubkey_to_bytes(r1r_s_pub)
-            try:
-                self.verificationkeys[r1r].verify(r1r_signature, message)
-            except Exception as e:
-                print(
-                    f"Client {self.client_id} failed to verify signature of client {r1r} in round 1, aborting. Error: {e}",
-                    flush=True,
-                )
-                sys.exit(1)
+        if self.isactive:
+            for r1r in self.round1_responders:
+                if r1r == self.client_id:
+                    continue
+                r1r_data = self.pubkeys_for_r1r[r1r]
+                r1r_c_pub = b64_to_pubkey(r1r_data["key_c_pub"])
+                r1r_s_pub = b64_to_pubkey(r1r_data["key_s_pub"])
+                r1r_signature = bytes.fromhex(r1r_data["signature"])
+                message = pubkey_to_bytes(r1r_c_pub) + pubkey_to_bytes(r1r_s_pub)
+                try:
+                    self.verificationkeys[r1r].verify(r1r_signature, message)
+                except Exception as e:
+                    print(
+                        f"Client {self.client_id} failed to verify signature of client {r1r} in round 1, aborting. Error: {e}",
+                        flush=True,
+                    )
+                    sys.exit(1)
 
         # Verify uniqueness of keys
         all_c_pub = {
@@ -328,13 +334,16 @@ class SecureAggregationClient:
 
         self.u3_users = sorted(u3_list)
         message_to_sign = json.dumps(self.u3_users).encode("utf-8")
-        signature = self.signingkey.sign(message_to_sign)
-
-        return {
+        payload = {
             "client_id": self.client_id,
             "round": 4,
-            "payload": {"signature": signature.hex()},
+            "payload":{}
         }
+        if self.isactive:
+            payload["payload"]["signature"] = self.signingkey.sign(message_to_sign).hex()
+        else:
+            payload["payload"]["signature"] = "dummy"
+        return payload
 
     def unmasking(self, r4_response: dict) -> dict:
         users_from_server = r4_response.get("users", None)
@@ -355,22 +364,23 @@ class SecureAggregationClient:
             sys.exit(1)
 
         # active adversary check: verify all signatures of the u3 list from round 3
-        u3_list_from_server = r4_response.get("u2_users", [])
-        message_to_verify = json.dumps(u3_list_from_server).encode("utf-8")
-        for other_id, sig in r4_response["u2_signatures"].items():
-            other_id_int = int(other_id)
-            if other_id_int == self.client_id:
-                continue
-            try:
-                self.verificationkeys[other_id_int].verify(
-                    bytes.fromhex(sig), message_to_verify
-                )
-            except Exception as e:
-                print(
-                    f"Client {self.client_id} failed to verify signature of client {other_id} in round 4, aborting. Error: {e}",
-                    flush=True,
-                )
-                sys.exit(1)
+        if self.isactive:
+            u3_list_from_server = r4_response.get("u2_users", [])
+            message_to_verify = json.dumps(u3_list_from_server).encode("utf-8")
+            for other_id, sig in r4_response["u2_signatures"].items():
+                other_id_int = int(other_id)
+                if other_id_int == self.client_id:
+                    continue
+                try:
+                    self.verificationkeys[other_id_int].verify(
+                        bytes.fromhex(sig), message_to_verify
+                    )
+                except Exception as e:
+                    print(
+                        f"Client {self.client_id} failed to verify signature of client {other_id} in round 4, aborting. Error: {e}",
+                        flush=True,
+                    )
+                    sys.exit(1)
 
         # Determine who dropped (in U2 but not in U3)
         dropped = set(self.round2_responders) - set(self.u3_users)
@@ -440,6 +450,7 @@ def main():
     client = SecureAggregationClient(
         client_id=client_id,
         x_u=x_u,
+        isactive=True,
         signingkeyfile=args.signingkey,
         verificationkeysfile=args.verificationkeys,
     )
