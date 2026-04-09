@@ -3,7 +3,7 @@ import json
 import pytest
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from _client_helper import b64_to_pubkey, pubkey_to_b64, pubkey_to_bytes
@@ -39,7 +39,8 @@ def active_client_context(tmp_path, base_client):
     
     sign_path = tmp_path / "sign.bin"
     verif_path = tmp_path / "verif.json"
-
+    print(f"Signing key path: {sign_path}")
+    print(f"Verification key path: {verif_path}")
     sign_path.write_bytes(raw_sk)
     verif_path.write_text(json.dumps({str(cid): vk_hex}))
 
@@ -67,12 +68,12 @@ class TestPayloadStructure:
 
 class TestKeyGeneration:
     def test_keys_are_valid_x25519(self, base_client):
-        p = base_client(isactive=True).advertise_keys()["payload"]
-        assert isinstance(b64_to_pubkey(p["key_c_pub"]), X25519PrivateKey)
-        assert isinstance(b64_to_pubkey(p["key_s_pub"]), X25519PrivateKey)
+        p = base_client().advertise_keys()["payload"]
+        assert isinstance(b64_to_pubkey(p["key_c_pub"]), X25519PublicKey)
+        assert isinstance(b64_to_pubkey(p["key_s_pub"]), X25519PublicKey)
 
     def test_keys_are_32(self, base_client):
-        p = base_client(isactive=True).advertise_keys()["payload"]
+        p = base_client().advertise_keys()["payload"]
         for k in ("key_c_pub", "key_s_pub"):
             assert len(base64.b64decode(p[k])) == 32
 
@@ -85,7 +86,7 @@ class TestKeyGeneration:
         ])
 
     def test_payload_matches_instance_state(self, base_client):
-        client = base_client(isactive=True)
+        client = base_client()
         p = client.advertise_keys()["payload"]
         assert p["key_c_pub"] == pubkey_to_b64(client.key_c_pub)
         assert p["key_s_pub"] == pubkey_to_b64(client.key_s_pub)
