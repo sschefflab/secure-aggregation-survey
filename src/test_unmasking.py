@@ -1,19 +1,79 @@
 import pytest
 import json
 import sys
+from client import SecureAggregationClient
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from unittest.mock import MagicMock
 
 # Assuming these exist in your helper or are accessible
 # from _client_helper import bencode 
 
 @pytest.fixture
-def client_with_state(active_client_context):
-    client, sk = active_client_context
-    # Mock threshold and internal round data
-    client.round2_responders = [1, 2, 3, 5] # 5 is self
-    client.u3_users = [2, 5]               # 2 survived, 1 and 3 dropped
+def base_client():
+    def _make_client(client_id=1, x_u=None, isactive=False, signing_key_file=None, verification_keys_file=None):
+        if x_u is None:
+            x_u = [0] * 10  # Default input vector of length 10
+        return SecureAggregationClient(
+            client_id=client_id,
+            x_u=x_u or [0] * 10,
+            isactive=isactive,
+            signingkeyfile=signing_key_file,
+            verificationkeysfile=verification_keys_file,
+        )
+    return _make_client
+
+@pytest.fixture
+def active_client_context(tmp_path, base_client):
+    cid = 5
+    sk = ed25519.Ed25519PrivateKey.generate()
+
+    raw_sk = sk.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption())
     
-    # Mock received shares (ID: [index, share_bytes])
+    vk_hex = sk.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw).hex()
+    
+    cid_1 = 1
+    sk_1= ed25519.Ed25519PrivateKey.generate()
+
+    raw_sk_1 = sk_1.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption())
+    
+    vk_hex_1 = sk_1.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw).hex()
+    
+    sign_path = tmp_path / "sign.bin"
+    verif_path = tmp_path / "verif.json"
+    print(f"Signing key path: {sign_path}")
+    print(f"Verification key path: {verif_path}")
+    sign_path.write_bytes(raw_sk)
+    verif_path.write_text(json.dumps({str(cid): vk_hex, str(cid_1): vk_hex_1})) 
+
+    client = base_client(client_id=cid, isactive=True, signing_key_file=str(sign_path), verification_keys_file=str(verif_path))
+
+    return client, sk, sk_1
+
+
+@pytest.fixture
+def client_with_state(active_client_context, monkeypatch):
+    import client as client_mod
+    # Set threshold low so tests don't exit
+    monkeypatch.setattr(client_mod, "THRESHOLD_CLIENTS", 1)
+    
+    # Unpack all 3 values from the previous fixture
+    client, sk, sk_1 = active_client_context
+    
+    client.round2_responders = [1, 2, 3, 5]
+    client.u3_users = [2, 5]
+    
+    # Mock shares (ensure these match the IDs in round2/u3)
     client.received_s_sec_shares = {
         1: [(1, b"share1_a"), (2, b"share1_b")],
         3: [(1, b"share3_a"), (2, b"share3_b")]
@@ -22,14 +82,13 @@ def client_with_state(active_client_context):
         2: (1, b"seed_share2")
     }
     
-    # Mock verification keys for other users
-    # In a real test, you'd populate this with Ed25519 public keys
+    # Ensure verification keys exist for active check
     client.verificationkeys = {
         2: MagicMock(),
         1: MagicMock()
     }
-    
     return client
+    
 class TestUnmaskingPayloadStructure:
     def test_top_level_keys(self, client_with_state):
         r4_response = {

@@ -7,16 +7,28 @@ from cryptography.hazmat.primitives import serialization
 # Assuming these helpers exist in your project
 from _client_helper import (
     pubkey_to_b64, 
-    jencode_ciphertexts, 
     encrypt_with_derived_key, 
     ids_to_associated_data,
     jencode_to_bytes,
-    benecode # or however you encode shares to bytes
 )
 from client import SecureAggregationClient
 
 # Constants for field math (Adjust based on your actual config)
 R = 2**32 # Example field size
+
+@pytest.fixture
+def base_client():
+    def _make_client(client_id=1, x_u=None, isactive=False, signing_key_file=None, verification_keys_file=None):
+        if x_u is None:
+            x_u = [0] * 10  # Default input vector of length 10
+        return SecureAggregationClient(
+            client_id=client_id,
+            x_u=x_u or [0] * 10,
+            isactive=isactive,
+            signingkeyfile=signing_key_file,
+            verificationkeysfile=verification_keys_file,
+        )
+    return _make_client
 
 @pytest.fixture
 def client_with_state(base_client):

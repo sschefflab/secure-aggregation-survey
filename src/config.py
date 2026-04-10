@@ -14,7 +14,7 @@ MAX_CLIENTS = 10
 # n in Bonawitz et al. 2017
 
 
-THRESHOLD_CLIENTS = 5
+THRESHOLD_CLIENTS = 3
 # for demo only! Should really be more like 100
 # t in Bonawitz et al. 2017
 
