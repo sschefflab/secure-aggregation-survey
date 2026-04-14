@@ -36,7 +36,7 @@ echo "Generating signing/verification keys..."
 CLIENT_PIDS=""
 for i in 1 2 3 4 5 6 7 8 9 10; do
  echo "Starting client $i, logging to $LOG_DIR/client${i}.log..."
- "$PYTHON_BIN" "$SRC_DIR/client.py" --id "$i" --vec "1,2,4" --signingkey "keys/sign-${i}.key" --verificationkeys "keys/verification_keys.json" > "$LOG_DIR/client${i}.log" 2>&1 &
+ "$PYTHON_BIN" "$SRC_DIR/test_client.py" --id "$i" --vec "1,2,4" --signingkey "keys/sign-${i}.key" --verificationkeys "keys/verification_keys.json" > "$LOG_DIR/client${i}.log" 2>&1 &
  CLIENT_PIDS="$CLIENT_PIDS $!"
  sleep 0.1
 done

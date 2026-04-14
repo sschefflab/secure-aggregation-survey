@@ -456,10 +456,25 @@ def main():
     )
 
     r1_response = do_round(client_id, 1, client.advertise_keys(), SERVER_URL)
+
+    if client_id in [9, 10]:
+      print(f"Client {client_id} is dropping out.", flush=True)
+      return
+        
     r2_response = do_round(client_id, 2, client.share_keys(r1_response), SERVER_URL)
+
+    if client_id in [7, 8]:
+      print(f"Client {client_id} is dropping out.", flush=True)
+      return
+    
     r3_response = do_round(
         client_id, 3, client.masked_input_collection(r2_response), SERVER_URL
     )
+
+    if client_id in [6]:
+      print(f"Client {client_id} is dropping out.", flush=True)
+      return
+    
     r4_response = do_round(
         client_id, 4, client.consistency_check(r3_response), SERVER_URL
     )
