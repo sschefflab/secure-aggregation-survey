@@ -19,3 +19,6 @@ BACKUP/
 
 #dont push test files yet
 src/tests/*
+
+#dont add keys
+src/keys/*
